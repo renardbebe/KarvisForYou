@@ -1443,6 +1443,18 @@ def _parse_llm_output(text):
             lines = lines[:-1]
         text = "\n".join(lines).strip()
 
+    # 修复 LLM 返回双花括号 {{ }} 的问题（DeepSeek 偶发）
+    if "{{" in text and "}}" in text:
+        import re as _re
+        fixed = _re.sub(r"\{\{", "{", text)
+        fixed = _re.sub(r"\}\}", "}", fixed)
+        try:
+            result = json.loads(fixed)
+            _log("[Brain] JSON 双花括号已修复")
+            return result
+        except json.JSONDecodeError:
+            pass  # 修复失败，继续走正常解析
+
     # 尝试直接解析
     try:
         return json.loads(text)
