@@ -60,8 +60,8 @@ ALERT_COOLDOWN_SECONDS = int(os.environ.get("ALERT_COOLDOWN_SECONDS", "300"))  #
 
 # ============ V8: 智能调度引擎 ============
 SCHEDULER_TICK_MINUTES = 30       # 心跳评估间隔（分钟）
-SCHEDULER_DEFAULT_WAKE = "08:00"  # 默认起床时间
-SCHEDULER_DEFAULT_SLEEP = "23:30" # 默认入睡时间
+SCHEDULER_DEFAULT_WAKE = "07:30"  # 默认起床时间
+SCHEDULER_DEFAULT_SLEEP = "21:30" # 默认入睡时间
 SCHEDULER_WEEKEND_SHIFT = 60      # 周末平均晚起分钟数
 SCHEDULER_RHYTHM_WINDOW = 7       # 节奏学习滑动窗口（天）
 SCHEDULER_PUSH_MAX_DAILY = 6      # 每日所有主动推送总上限
