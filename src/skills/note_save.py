@@ -45,7 +45,7 @@ def execute(params, state, ctx):
         return {"success": True}
     else:
         _log("[note.save] 保存失败")
-        return {"success": False, "reply": "保存到 Obsidian 失败，稍后会重试"}
+        return {"success": False, "reply": "保存失败，稍后会重试"}
 
 
 def _format_message(content, attachment):

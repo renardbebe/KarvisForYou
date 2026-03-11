@@ -435,7 +435,7 @@ def build_payload(msg, ctx):
         content = msg.get('content', '')
         if content.startswith('/help') or content.startswith('帮助'):
             # 帮助命令直接在网关层处理
-            return None, 'Karvis 🤖\n\n发送任何内容，我会帮你记录到 Obsidian。\n支持：文字、图片、语音、视频、链接\n\n打卡相关：说"打卡"开始每日复盘'
+            return None, 'Karvis 🤖\n\n发送任何内容，我会帮你记录到笔记。\n支持：文字、图片、语音、视频、链接\n\n打卡相关：说"打卡"开始每日复盘'
         payload["type"] = "text"
         payload["text"] = content
         # F1: 检测纯 URL 文本，自动抓取网页正文

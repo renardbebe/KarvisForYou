@@ -600,7 +600,7 @@ def _build_wechat_summary(period_str, bill_summary, snapshot_current,
             parts.append(f"👉 {act}")
 
     parts.append("")
-    parts.append("完整报告已写入 Obsidian 📝")
+    parts.append("完整报告已写入笔记 📝")
 
     return "\n".join(parts)
 

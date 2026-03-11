@@ -777,7 +777,7 @@ def process(payload, send_fn=None, ctx=None):
         # Quick-Notes 统一写入
         if payload.get("type") != "system":
             _save_to_quick_notes(payload, state, ctx)
-        return {"reply": "已记录到 Obsidian（AI 暂时不可用）"}
+        return {"reply": "已记录（AI 暂时不可用，稍后再试~）"}
 
     # 6. 解析 LLM 输出
     decision = _parse_llm_output(llm_response)
@@ -785,7 +785,7 @@ def process(payload, send_fn=None, ctx=None):
         _log(f"[Brain] JSON 解析失败，原始: {llm_response[:300]}")
         if payload.get("type") != "system":
             _save_to_quick_notes(payload, state, ctx)
-        return {"reply": "已记录到 Obsidian"}
+        return {"reply": "已记录~"}
 
     _log(f"[Brain] 决策: skill={decision.get('skill')}, thinking={decision.get('thinking', '')[:80]}")
     if decision.get("memory_updates"):
