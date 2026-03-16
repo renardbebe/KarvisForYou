@@ -500,13 +500,18 @@ def _select_rules(state, payload=None, ctx=None):
     方案 C: system 类型请求只注入 RULES_SYSTEM_TASKS（不含 SKILLS 和用户交互 RULES）
     方案 A: 用户消息根据 state 和关键词动态注入分段，RULES_CORE 始终注入
     V12: 管理员额外注入 RULES_FINANCE，所有用户注入 RULES_SKILLS_MGMT
+
+    Returns:
+        (segments, tags): segments 是 RULES 文本列表，tags 是注入的分段标签列表
+                          tags 用于 SKILLS 条件注入（如 ["books_media", "habits"]）
     """
     # 方案 C: 定时任务走精简 prompt
     if payload and payload.get("type") == "system":
-        return [prompts.RULES_SYSTEM_TASKS]
+        return [prompts.RULES_SYSTEM_TASKS], []
 
     # 方案 A: 用户消息 — CORE 始终注入，其余按需
     segments = [prompts.RULES_CORE]
+    tags = []  # 跟踪注入了哪些分段，用于 SKILLS 条件注入
 
     user_text = (payload.get("text", "") if payload else "").lower() if payload else ""
 
@@ -515,12 +520,14 @@ def _select_rules(state, payload=None, ctx=None):
                  "在读", "在看", "电影", "剧", "纪录片", "动画", "影视")
     if any(kw in user_text for kw in _BOOKS_KW):
         segments.append(prompts.RULES_BOOKS_MEDIA)
+        tags.append("books_media")
 
     # 习惯/Top3：仅关键词触发
     _HABITS_KW = ("实验", "习惯", "top 3", "top3", "今天要做", "今天的目标",
                   "今天最重要")
     if any(kw in user_text for kw in _HABITS_KW):
         segments.append(prompts.RULES_HABITS)
+        tags.append("habits")
 
     # 高级功能：语音 + 关键词触发（去掉 pending_decisions state 触发）
     _ADV_KW = ("要不要", "纠结", "犹豫", "决定了", "决策", "复盘",
@@ -529,6 +536,7 @@ def _select_rules(state, payload=None, ctx=None):
     is_voice = payload.get("type") == "voice" if payload else False
     if is_voice or any(kw in user_text for kw in _ADV_KW):
         segments.append(prompts.RULES_ADVANCED)
+        tags.append("advanced")
 
     # V12: 财务规则 — 仅管理员且包含财务关键词时注入
     if ctx and ctx.is_admin:
@@ -536,6 +544,7 @@ def _select_rules(state, payload=None, ctx=None):
                        "财报", "月度报告", "快照")
         if any(kw in user_text for kw in _FINANCE_KW):
             segments.append(prompts.RULES_FINANCE)
+            tags.append("finance")
 
     # V12: Skill 管理规则 — 关键词触发
     _SKILLS_KW = ("功能", "技能", "skill", "开启", "关闭", "禁用", "启用",
@@ -543,7 +552,7 @@ def _select_rules(state, payload=None, ctx=None):
     if any(kw in user_text for kw in _SKILLS_KW):
         segments.append(prompts.RULES_SKILLS_MGMT)
 
-    return segments
+    return segments, tags
 
 
 def build_system_prompt(state, ctx, prompt_futs=None, payload=None):
@@ -579,7 +588,7 @@ def build_system_prompt(state, ctx, prompt_futs=None, payload=None):
 
     # 方案 C+A: 条件注入 RULES（V12: 传入 ctx 用于 admin 判断）
     is_system = payload and payload.get("type") == "system"
-    rules_segments = _select_rules(state, payload, ctx=ctx)
+    rules_segments, rule_tags = _select_rules(state, payload, ctx=ctx)
     rules_text = "\n\n".join(rules_segments)
 
     # V12: system 类型不注入 SKILLS；其他场景根据用户权限动态生成
@@ -588,7 +597,7 @@ def build_system_prompt(state, ctx, prompt_futs=None, payload=None):
     else:
         from skill_loader import get_skills_for_prompt
         allowed_names = get_skills_for_prompt(ctx)
-        skills_block = prompts.build_skills_prompt(allowed_names)
+        skills_block = prompts.build_skills_prompt(allowed_names, injected_rule_tags=rule_tags)
 
     parts = [soul,
              f"\n## 长期记忆\n{mem}",

@@ -1622,38 +1622,83 @@ def _check_pending_todos(ctx):
 def _build_weather_context():
     """
     V3-F13: 获取天气信息，供 morning_report 注入。
-    使用心知天气 API（免费版），返回 dict 或空 dict。
+    优先使用心知天气 API（需 Key），fallback 到 wttr.in（免费无需 Key）。
+    返回包含温度、天气、湿度、风力、紫外线等信息的 dict，供 AI 生成穿搭出行建议。
     """
-    if not WEATHER_API_KEY:
-        return {}
+    # 方案 1：心知天气（有 Key 时使用）
+    if WEATHER_API_KEY:
+        try:
+            resp = requests.get(
+                "https://api.seniverse.com/v3/weather/daily.json",
+                params={
+                    "key": WEATHER_API_KEY,
+                    "location": WEATHER_CITY,
+                    "language": "zh-Hans",
+                    "unit": "c",
+                    "start": 0,
+                    "days": 1
+                },
+                timeout=5
+            )
+            if resp.status_code == 200:
+                data = resp.json()["results"][0]["daily"][0]
+                weather = {
+                    "city": WEATHER_CITY,
+                    "weather_day": data.get("text_day", ""),
+                    "weather_night": data.get("text_night", ""),
+                    "high": data.get("high", ""),
+                    "low": data.get("low", ""),
+                }
+                _log(f"[Weather] 心知天气: {WEATHER_CITY} {weather['weather_day']} {weather['low']}~{weather['high']}°C")
+                return weather
+            else:
+                _log(f"[Weather] 心知天气 API 返回非 200: {resp.status_code}, fallback 到 wttr.in")
+        except Exception as e:
+            _log(f"[Weather] 心知天气获取失败: {e}, fallback 到 wttr.in")
+
+    # 方案 2：wttr.in（免费，无需 Key，信息丰富）
     try:
         resp = requests.get(
-            "https://api.seniverse.com/v3/weather/daily.json",
-            params={
-                "key": WEATHER_API_KEY,
-                "location": WEATHER_CITY,
-                "language": "zh-Hans",
-                "unit": "c",
-                "start": 0,
-                "days": 1
-            },
-            timeout=5
+            f"https://wttr.in/{WEATHER_CITY}",
+            params={"format": "j1"},
+            headers={"Accept-Language": "zh"},
+            timeout=8
         )
         if resp.status_code == 200:
-            data = resp.json()["results"][0]["daily"][0]
+            data = resp.json()
+            current = data.get("current_condition", [{}])[0]
+            today_forecast = data.get("weather", [{}])[0]
+            hourly = today_forecast.get("hourly", [])
+
+            # 提取白天时段（8-18点）的降雨概率峰值
+            rain_chance_max = 0
+            for h in hourly:
+                hour_val = int(h.get("time", "0")) // 100
+                if 8 <= hour_val <= 18:
+                    rain_chance_max = max(rain_chance_max, int(h.get("chanceofrain", "0")))
+
             weather = {
                 "city": WEATHER_CITY,
-                "weather_day": data.get("text_day", ""),
-                "weather_night": data.get("text_night", ""),
-                "high": data.get("high", ""),
-                "low": data.get("low", ""),
+                "weather_day": current.get("lang_zh", [{}])[0].get("value", current.get("weatherDesc", [{}])[0].get("value", "")),
+                "high": today_forecast.get("maxtempC", ""),
+                "low": today_forecast.get("mintempC", ""),
+                "feels_like": current.get("FeelsLikeC", ""),
+                "humidity": current.get("humidity", ""),
+                "wind_speed_kmph": current.get("windspeedKmph", ""),
+                "uv_index": today_forecast.get("uvIndex", ""),
+                "rain_chance": str(rain_chance_max),
+                "sunrise": today_forecast.get("astronomy", [{}])[0].get("sunrise", ""),
+                "sunset": today_forecast.get("astronomy", [{}])[0].get("sunset", ""),
             }
-            _log(f"[Weather] {WEATHER_CITY}: {weather['weather_day']} {weather['low']}~{weather['high']}°C")
+            _log(f"[Weather] wttr.in: {WEATHER_CITY} {weather['weather_day']} "
+                 f"{weather['low']}~{weather['high']}°C 体感{weather['feels_like']}°C "
+                 f"湿度{weather['humidity']}% 降雨{weather['rain_chance']}%")
             return weather
         else:
-            _log(f"[Weather] API 返回非 200: {resp.status_code} {resp.text[:100]}")
+            _log(f"[Weather] wttr.in 返回非 200: {resp.status_code}")
     except Exception as e:
-        _log(f"[Weather] 获取天气失败: {e}")
+        _log(f"[Weather] wttr.in 获取失败: {e}")
+
     return {}
 
 
@@ -1685,14 +1730,7 @@ def _generate_daily_intents(state):
         wake_time = _add_minutes(wake_time, shift)
 
     intents = [
-        {
-            "type": "morning_report",
-            "earliest": wake_time,
-            "latest": _add_minutes(wake_time, 150),
-            "ideal": _add_minutes(wake_time, 30),
-            "priority": "normal",
-            "status": "pending"
-        },
+        # morning_report 已移至固定 cron 08:00，不再由动态调度驱动
         {
             "type": "todo_remind",
             "earliest": _add_minutes(wake_time, 60),
@@ -2065,6 +2103,7 @@ def _setup_builtin_scheduler():
     jobs = [
         # 保留：不依赖用户节奏的固定任务
         ("refresh_cache",   {"trigger": "interval", "minutes": 30}),
+        ("morning_report",  {"trigger": "cron", "hour": 8, "minute": 0}),   # 晨报固定 08:00
         ("mood_generate",   {"trigger": "cron", "hour": 22, "minute": 0}),
         ("weekly_review",   {"trigger": "cron", "day_of_week": "sun", "hour": 21, "minute": 30}),
         ("monthly_review",  {"trigger": "cron", "day": "last", "hour": 22, "minute": 0}),

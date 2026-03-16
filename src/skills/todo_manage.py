@@ -506,17 +506,19 @@ def add(params, state, ctx):
 
 def complete(params, state, ctx):
     """
-    完成待办事项，支持关键词匹配和序号批量完成。
+    完成待办事项，支持关键词匹配、序号批量完成、全部完成。
     循环待办只标记今天完成（打卡），不移到已完成区域。
 
     params:
         keyword: str — 用于匹配待办的关键词
         indices: str — 用序号完成，支持 "3" / "2-7" / "1,3,5"
+        all: bool — 全部完成（一次性待办移到已完成，循环待办打卡）
     """
     keyword = (params.get("keyword") or "").strip().lower()
     indices_str = (params.get("indices") or "").strip()
+    complete_all = params.get("all", False)
 
-    if not keyword and not indices_str:
+    if not keyword and not indices_str and not complete_all:
         return {"success": False, "reply": "请告诉我要完成哪个待办"}
 
     # 自动迁移
@@ -528,6 +530,46 @@ def complete(params, state, ctx):
 
     doing, done = _parse_todo_md(text)
     todos = state.get("todos", [])
+
+    if complete_all:
+        # ── 全部完成模式 ──
+        if not doing:
+            return {"success": True, "reply": "当前没有进行中的待办，全都搞定啦~ 🎉"}
+
+        completed_names = []
+        checkin_names = []
+        new_doing = []
+        for item in doing:
+            matched_todo = _find_todo_by_content(todos, item["content"])
+            if matched_todo and matched_todo.get("recur"):
+                # 循环待办：打卡，保留在进行中
+                matched_todo["last_completed"] = _now_str()
+                checkin_names.append(item["content"])
+                new_doing.append(item)
+            else:
+                # 一次性待办：移到已完成
+                done_line = item["raw"].replace("- [ ]", "- [x]")
+                if f"`{_now_str()}`" not in done_line:
+                    done_line += f" ✅ `{_now_str()}`"
+                done.insert(0, {"raw": done_line, "content": item["content"], "date": _now_str()})
+                completed_names.append(item["content"])
+                if matched_todo:
+                    todos.remove(matched_todo)
+
+        new_text = _rebuild_todo_md(new_doing, done)
+        ok = ctx.IO.write_text(ctx.todo_file, new_text)
+
+        if ok:
+            parts = []
+            if completed_names:
+                names = "、".join(f"「{c[:20]}」" for c in completed_names)
+                parts.append(f"已完成 {len(completed_names)} 条待办 ✅\n{names}")
+            if checkin_names:
+                names = "、".join(f"「{c[:20]}」" for c in checkin_names)
+                parts.append(f"今日打卡 {len(checkin_names)} 条 🔁\n{names}")
+            _log(f"[todo.done] 全部完成: done={len(completed_names)}, checkin={len(checkin_names)}")
+            return {"success": True, "reply": "\n".join(parts), "state_updates": {"todos": todos}}
+        return {"success": False, "reply": "写入 Todo.md 失败"}
 
     if indices_str:
         # ── 序号模式：批量完成 ──
