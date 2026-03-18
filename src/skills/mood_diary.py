@@ -4,11 +4,10 @@ Skill: mood.generate
 每天自动从当天消息中提取情绪，生成情绪日记。
 写入 02-Notes/情感日记/{date}.md（追加 AI 情绪分析段）。
 
-数据源优先级：
-1. 打卡 Q2 评分（用户主观 > AI 推断）
-2. Quick-Notes + 归档笔记（全天消息）
-3. 打卡 Q3(纠结) + Q4(念头) 作为高权重信号
-4. 决策日志的 thinking 字段（辅助意图判断）
+数据源（纯对话推断，不依赖打卡）：
+1. Quick-Notes + 归档笔记（全天消息）— 主要数据源
+2. 决策日志的 skill/thinking 字段（辅助意图判断）
+3. 近期对话上下文（state.recent_messages）
 """
 import sys
 import json
@@ -35,33 +34,28 @@ def execute(params, state, ctx):
 
     _log(f"[mood.generate] 开始生成 {date_str} 情绪日记")
 
-    # 1. 并发收集当天所有数据
+    # 1. 收集当天所有对话数据
     data = _collect_mood_data(date_str, state, ctx)
 
-    if not data["notes"].strip() and not data["checkin"]:
+    if not data["notes"].strip():
         _log("[mood.generate] 今天没有记录")
         return {"success": True, "reply": f"今天（{date_str}）还没有记录，无法生成情绪日记"}
 
-    # 2. AI 分析情绪
+    # 2. AI 从对话中推断情绪
     from brain import call_deepseek
     analysis = _ai_analyze_mood(data, date_str, call_deepseek, state)
 
     if not analysis:
         return {"success": False, "reply": "AI 情绪分析失败"}
 
-    # 3. 如果有打卡评分，用打卡的覆盖 AI 的
-    checkin_score = data.get("checkin_score")
-    if checkin_score is not None:
-        analysis["mood_score"] = checkin_score
-        analysis["score_source"] = "checkin"
-    else:
-        analysis["score_source"] = "auto"
+    # 所有评分都来自 AI 对话推断
+    analysis["score_source"] = "conversation"
 
-    # 4. 写入 state.mood_scores
+    # 3. 写入 state.mood_scores
     mood_entry = {
         "date": date_str,
         "score": analysis.get("mood_score", 5),
-        "source": analysis["score_source"],
+        "source": "conversation",
         "label": analysis.get("mood_label", "")
     }
     scores = state.setdefault("mood_scores", [])
@@ -70,7 +64,7 @@ def execute(params, state, ctx):
     scores.append(mood_entry)
     state["mood_scores"] = scores
 
-    # 5. 构建 Markdown 并写入
+    # 4. 构建 Markdown 并写入
     mood_md = _build_mood_diary(date_str, analysis, data)
     file_path = f"{ctx.emotion_notes_dir}/{date_str}.md"
     ok = _write_mood_diary(ctx, file_path, date_str, mood_md)
@@ -89,7 +83,7 @@ def execute(params, state, ctx):
 
 
 def _collect_mood_data(date_str, state, ctx):
-    """并发收集当天所有情绪相关数据"""
+    """并发收集当天所有对话/笔记数据（不依赖打卡）"""
     from concurrent.futures import ThreadPoolExecutor
 
     files_to_read = {
@@ -98,7 +92,6 @@ def _collect_mood_data(date_str, state, ctx):
         "fun": f"{ctx.fun_notes_dir}/{date_str}.md",
         "work": f"{ctx.work_notes_dir}/{date_str}.md",
         "misc": ctx.misc_file,
-        "daily": f"{ctx.daily_notes_dir}/{date_str}.md",
         "decisions": ctx.decision_log_file,
     }
 
@@ -136,20 +129,20 @@ def _collect_mood_data(date_str, state, ctx):
     if misc_entries:
         parts.extend(["【碎碎念】", misc_entries])
 
-    notes = "\n\n".join(parts)
+    # 近期对话（state 中的 recent_messages）
+    recent = state.get("recent_messages", [])
+    today_msgs = [m for m in recent if m.get("text", "").strip()]
+    if today_msgs:
+        conv_parts = []
+        for m in today_msgs[-20:]:
+            role = "用户" if m.get("role") == "user" else "Karvis"
+            conv_parts.append(f"[{role}] {m.get('text', '')[:100]}")
+        parts.extend(["【近期对话】", "\n".join(conv_parts)])
 
-    # 提取打卡数据
-    checkin_data = _extract_checkin_data(results["daily"])
-    checkin_score = None
-    if checkin_data:
-        for item in checkin_data:
-            if item.get("score") is not None:
-                checkin_score = item["score"]
+    notes = "\n\n".join(parts)
 
     return {
         "notes": notes,
-        "checkin": checkin_data,
-        "checkin_score": checkin_score,
         "decisions": decision_entries,
     }
 
@@ -186,74 +179,18 @@ def _extract_decision_entries(text, date_str):
     return entries
 
 
-def _extract_checkin_data(daily_text):
-    """从 Daily Note 中提取打卡回答"""
-    if not daily_text or "## 每日复盘" not in daily_text:
-        return None
-
-    checkin_section = daily_text.split("## 每日复盘")[1]
-    # 截取到下一个 ## 或文件末尾
-    next_section = checkin_section.find("\n## ")
-    if next_section >= 0:
-        checkin_section = checkin_section[:next_section]
-
-    items = []
-    current_q = None
-    current_a_lines = []
-
-    for line in checkin_section.split("\n"):
-        if line.startswith("### Q"):
-            if current_q is not None:
-                a_text = "\n".join(current_a_lines).strip()
-                item = {"q": current_q, "a": a_text}
-                # Q2 提取评分
-                if "几分" in current_q:
-                    import re
-                    match = re.search(r'(\d+)/10', a_text)
-                    if match:
-                        item["score"] = int(match.group(1))
-                items.append(item)
-            current_q = line.replace("### ", "").strip()
-            current_a_lines = []
-        elif current_q is not None:
-            current_a_lines.append(line)
-
-    # 最后一个 Q
-    if current_q is not None:
-        a_text = "\n".join(current_a_lines).strip()
-        item = {"q": current_q, "a": a_text}
-        if "几分" in current_q:
-            import re
-            match = re.search(r'(\d+)/10', a_text)
-            if match:
-                item["score"] = int(match.group(1))
-        items.append(item)
-
-    return items if items else None
-
 
 def _ai_analyze_mood(data, date_str, call_deepseek, state=None):
-    """调用 AI 分析当天情绪"""
+    """调用 AI 从当天对话内容中推断情绪"""
     import prompts
 
     state = state or {}
 
     # 组装 prompt
-    parts = [f"分析以下 {date_str} 的记录，提取情绪信息。"]
-
-    if data["checkin"]:
-        parts.append("\n【打卡数据（高权重）】")
-        for item in data["checkin"]:
-            parts.append(f"- {item['q']}: {item['a']}")
+    parts = [f"分析以下 {date_str} 的对话记录，从中推断用户全天的情绪变化。"]
 
     if data["notes"]:
-        parts.append(f"\n【当天消息记录】\n{data['notes'][:3000]}")
-
-    # 深度自问回答（高权重情绪信号）
-    reflect_answer = state.get("reflect_answer_today")
-    if reflect_answer:
-        reflect_q = state.get("reflect_question", "")
-        parts.append(f"\n【深度自问（高权重）】\n问题：{reflect_q}\n回答：{reflect_answer}")
+        parts.append(f"\n【当天对话和笔记记录】\n{data['notes'][:3000]}")
 
     if data["decisions"]:
         parts.append("\n【AI 决策日志（辅助）】")
@@ -297,17 +234,14 @@ def _build_mood_diary(date_str, analysis, data):
     emoji = analysis.get("mood_emoji", "📝")
     label = analysis.get("mood_label", "")
     score = analysis.get("mood_score", "?")
-    source = analysis.get("score_source", "auto")
     trend = analysis.get("trend", "")
     moments = analysis.get("key_moments", [])
     insight = analysis.get("insight", "")
 
-    source_label = "打卡" if source == "checkin" else "AI 推断"
-
     lines = [
         f"## {emoji} 情绪分析",
         "",
-        f"**整体评分**：{score}/10（{source_label}）",
+        f"**整体评分**：{score}/10（对话推断）",
         f"**情绪标签**：{label}",
         "",
     ]
@@ -328,22 +262,11 @@ def _build_mood_diary(date_str, analysis, data):
     if insight:
         lines.extend(["**AI 洞察**：", "", insight, ""])
 
-    # 打卡数据引用
-    if data.get("checkin"):
-        lines.extend(["---", "", "**打卡回顾**："])
-        for item in data["checkin"]:
-            q = item.get("q", "")
-            a = item.get("a", "")
-            if len(a) > 80:
-                a = a[:80] + "..."
-            lines.append(f"- {q} → {a}")
-        lines.append("")
-
     now_str = datetime.now(BEIJING_TZ).strftime("%Y-%m-%d %H:%M")
     lines.extend([
         "---",
         "",
-        f"*🤖 情绪分析自动生成于 {now_str}*",
+        f"*🤖 情绪分析自动生成于 {now_str}（基于对话内容推断）*",
     ])
 
     return "\n".join(lines)
