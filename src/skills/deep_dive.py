@@ -18,7 +18,6 @@ Skill: deep_dive (V3-F16)
 """
 import sys
 import json
-import requests
 from datetime import datetime, timezone, timedelta
 from concurrent.futures import ThreadPoolExecutor
 
@@ -219,8 +218,8 @@ def _search_in_text(text, keywords, source):
 
 
 def _generate_report(topic, keywords, raw_data, state):
-    """调用 LLM 生成深度分析报告"""
-    from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
+    """调用 LLM 生成深度分析报告（通过统一 call_llm 入口）"""
+    from brain import call_llm
 
     # 组装数据摘要
     entries_text = ""
@@ -252,28 +251,16 @@ def _generate_report(topic, keywords, raw_data, state):
         decision_text=decision_text[:500] if decision_text else "无",
     )
 
-    url = f"{DEEPSEEK_BASE_URL}/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "model": DEEPSEEK_MODEL,
-        "messages": [
+    try:
+        report = call_llm([
             {"role": "system", "content": prompts.DEEP_DIVE_SYSTEM},
             {"role": "user", "content": prompt}
-        ],
-        "max_tokens": 800,
-        "temperature": 0.4
-    }
+        ], model_tier="main", max_tokens=800, temperature=0.4)
 
-    try:
-        resp = requests.post(url, headers=headers, json=data, timeout=60)
-        if resp.status_code == 200:
-            report = resp.json()["choices"][0]["message"]["content"].strip()
+        if report:
             _log(f"[deep_dive] 报告生成完成: {len(report)} chars")
-            return report
-        _log(f"[deep_dive] LLM 失败: {resp.status_code}")
+            return report.strip()
+        _log(f"[deep_dive] LLM 返回空")
     except Exception as e:
         _log(f"[deep_dive] 分析异常: {e}")
     return None
