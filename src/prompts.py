@@ -44,19 +44,25 @@ SKILL_PROMPT_LINES = {
     "classify.archive": '**classify.archive** `{category, title, content, attachment?, merge?}` — 归档（category: work|emotion|fun|misc, title≤10字, merge=true 合并到最近同类）',
     # ── 待办 ──
     "todo.add": '**todo.add** `{content, due_date?, remind_at?, recur?, recur_spec?}` — 添加待办。due_date=YYYY-MM-DD; remind_at=YYYY-MM-DD HH:MM(一次性)或HH:MM(循环); recur=daily/weekday/weekly/monthly; recur_spec={cycle_on,cycle_off,start_date}或{weekdays:[1,3,5]}',
-    "todo.done": '**todo.done** `{keyword?, indices?, all?}` — 完成待办。keyword=模糊匹配; indices=序号("3"/"2-7"/"1,3,5"); all=true全部完成',
+    "todo.done": '**todo.done** `{keyword?, indices?, all?}` — 完成待办。keyword=模糊匹配（如"猫粮"匹配"买猫粮"）; indices=序号完成，支持"3"/"2-7"/"1,3,5"; all=true全部完成（一次性待办标记完成，循环待办打卡）。有indices时优先用indices。序号对应todo.list返回的编号',
+    "todo.edit": '**todo.edit** `{keyword?, index?, new_content?, new_due_date?, new_remind_at?, new_recur?, new_recur_spec?}` — 修改待办。keyword或index(1-based序号)定位要改的条目；new_*字段指定要修改的属性，传""表示清除该属性',
+    "todo.delete": '**todo.delete** `{keyword?, indices?}` — 删除（废弃）待办，不记入已完成。用于用户说"不做了/删掉/取消这个待办"的场景。keyword=模糊匹配；indices=序号批量删除。注意区分：用户说"做完了"→todo.done，"不做了/删掉"→todo.delete',
     "todo.remind_cancel": '**todo.remind_cancel** `{id?, content?}` — 取消循环提醒',
     "todo.list": '**todo.list** `{}` — 查看待办',
+    # ── 天气查询 ──
+    "weather.query": '**weather.query** `{city?}` — 查询实时天气。city 可选，默认用用户所在城市',
     # ── 日报/周报 ──
     "daily.generate": '**daily.generate** `{date?}` — 生成日报',
     "weekly.review": '**weekly.review** `{date?}` — 生成周回顾',
     "mood.generate": '**mood.generate** `{date?}` — 生成情绪日记',
     # ── 读书笔记 ──
-    "book.create": '**book.create** `{name, author, category, description, thought?}` — 创建/切换读书笔记',
+    "book.create": '**book.create** `{name, author, category, description, thought?, status?}` — 创建/切换读书笔记（status: want_read=想读 | reading=在读 | finished=读完 | paused=搁置，默认 want_read。根据用户语义判断：「想看/想读/加入书单」→want_read，「开始读/在读」→reading）',
     "book.excerpt": '**book.excerpt** `{content, book?}` — 添加书摘',
     "book.thought": '**book.thought** `{content, book?}` — 添加读书感想',
     "book.summary": '**book.summary** `{book?}` — 生成读书总结',
     "book.quotes": '**book.quotes** `{book?}` — 提炼金句',
+    "book.list": '**book.list** `{status?}` — 查看书单（status 可选过滤：want_read/reading/finished/paused）',
+    "book.status": '**book.status** `{book, status}` — 修改阅读状态（status: want_read=想读 | reading=在读 | finished=读完 | paused=搁置）',
     # ── 影视笔记 ──
     "media.create": '**media.create** `{name, director, media_type, year, description, thought?}` — 创建影视笔记（media_type: 电影|剧集|纪录片|动画）',
     "media.thought": '**media.thought** `{content, media?}` — 添加影视感想',
@@ -200,6 +206,13 @@ RULES_CORE = """# 决策规则
 ## Web 查看链接
 **意图**：用户想查看自己的数据/笔记/记录。 → `web.token`，无需参数
 
+## 天气查询
+**意图**：用户询问天气、温度、是否要带伞、穿什么衣服等与天气相关的问题。
+- → `weather.query`，params: `{city?}`
+- 如果用户指定了城市（"上海天气怎么样""深圳今天热不热"）→ city 填对应城市
+- 如果没指定城市 → 不填 city，使用默认配置
+- ⚠️ 区分：用户聊天提到天气但不是在查询（"今天天气真好啊"表达感受）→ 不触发，走 ignore
+
 ## ASR纠偏
 - 语音识别不合逻辑时纠偏，注意中英混杂（coding/debug/vibe等）
 - 纠偏后文本放 content，reply 展示纠偏结果
@@ -259,6 +272,23 @@ RULES_CORE = """# 决策规则
   - 提到了**序号** → indices
   - 表达了**全部/所有都完成** → all: true
 - **上下文推理**（核心能力）：如果最近对话中刚列出过待办（晨报/提醒/todo.list），用户紧接着说"做完了/搞定了"而没有指定具体哪个，应理解为**对刚才提到的那些待办的回应**，用 all: true
+
+### 修改待办 → `todo.edit`
+**意图**：用户想**修改已有待办**的内容、时间、循环等属性——"把xxx改成yyy""提醒时间改到8点""取消那个截止日期"。
+- **定位**：优先用 keyword 模糊匹配；如果用户提到了序号，用 index
+- **修改字段**：只传需要改的 new_* 字段，不需要改的不传
+  - new_content: 修改待办内容
+  - new_due_date: 修改截止日（传 "" 清除）
+  - new_remind_at: 修改提醒时间（传 "" 清除）
+  - new_recur: 修改循环规则（传 "" 取消循环）
+- ⚠️ **区分"修改"vs"删除+新建"**：用户说"把买猫粮改成买狗粮"→ todo.edit；用户说"不买猫粮了，加个买狗粮"→ todo.delete + todo.add
+
+### 删除待办 → `todo.delete`
+**意图**：用户想**废弃/移除**某个待办，**不是完成了**而是**不想做了**——"删掉""不做了""取消这个""去掉""移除"。
+- **关键区分**：
+  - "做完了/搞定了" → `todo.done`（完成，记入已完成）
+  - "不做了/删掉/取消" → `todo.delete`（废弃，不记入已完成）
+- **参数推理**：具体事项 → keyword；序号 → indices（批量删除）
 
 ### 查看待办 → `todo.list`
 **意图**：用户想看当前有什么任务/待办/要做的事
@@ -455,11 +485,15 @@ skill 选 `none`，直接在 reply 中输出。
 
 RULES_BOOKS_MEDIA = """## 读书笔记
 **意图**：用户在谈论一本书——可能是新书、正在读的书、书摘或感想。
-- **首次提到新书**（state 中无 active_book 或不同书名）→ book.create（用你的知识填 author/category/description，不确定填"未知"，感想可放 thought 参数）
+- **首次提到新书**（state 中无 active_book 或不同书名）→ book.create
+  - 用你的知识填 author/category/description，不确定填"未知"，感想可放 thought 参数
+  - **status 判断**：用户说"想看/想读/加入书单/记录" → status="want_read"；说"在读/开始读" → status="reading"；不提状态默认"want_read"
 - **已在读的书** + 分享感想 → book.thought（判断依据：state.active_book == 提到的书名）
 - 不确定是否已创建？有感想就用 book.create 并把感想放 thought（代码会自动转调）
 - 书中原文 → book.excerpt；自己看法 → book.thought
 - 想要总结 → book.summary；想要金句 → book.quotes
+- **查看书单 / 想看的书 / 我的书** → book.list（直接读取书单索引，不要走 internal.search。可选 status 参数过滤：如"在读的书"→status="reading"）
+- **修改阅读状态**（"开始读《X》/《X》读完了/搁置《X》"）→ book.status（从语义推理 status 值）
 
 ## 影视笔记
 **意图**：用户在谈论一部影视作品——可能是新看的、正在追的、或想分享感想。

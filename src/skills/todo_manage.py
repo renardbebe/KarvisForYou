@@ -914,6 +914,274 @@ def check_reminders(state, ctx=None, todo_file=None):
     return check_todos(state, ctx=ctx, todo_file=todo_file)
 
 
+def check_precise_reminders(state, ctx=None, todo_file=None):
+    """
+    精准提醒检查（每分钟调用）— 只检查当前分钟精确匹配的提醒。
+
+    与 check_todos 的区别：
+    - check_todos：30分钟一次，走意图系统，检查所有类型（截止日期、过期、循环无时间等）
+    - check_precise_reminders：1分钟一次，独立通道，只匹配有精确 HH:MM 的提醒
+
+    不读 Todo.md，不做迁移/交叉验证/过期清理，极轻量。
+    与 check_todos 共享 last_notified 防重复。
+    """
+    todos = state.get("todos", [])
+    if not todos:
+        return {"messages": [], "state_updates": {}}
+
+    now = _now()
+    now_hm = now.strftime("%H:%M")
+    today_str = now.strftime("%Y-%m-%d")
+    messages = []
+    changed = False
+
+    for t in todos:
+        remind_at = t.get("remind_at", "")
+        if not remind_at:
+            continue
+
+        recur = t.get("recur", "")
+
+        # ── 循环待办：HH:MM 格式 ──
+        if recur and len(remind_at) <= 5:
+            if t.get("last_notified") == today_str:
+                continue  # 今天已推送（可能被 check_todos 先推了）
+            if not _should_trigger_today(t, now):
+                continue
+            if remind_at == now_hm:
+                messages.append(f"🔁 提醒：{t['content']}")
+                t["last_notified"] = today_str
+                changed = True
+
+        # ── 一次性定时提醒：YYYY-MM-DD HH:MM 格式 ──
+        elif not recur and len(remind_at) > 5:
+            if t.get("last_notified"):
+                continue  # 已推送过
+            try:
+                remind_dt = datetime.strptime(remind_at, "%Y-%m-%d %H:%M")
+                remind_date = remind_dt.strftime("%Y-%m-%d")
+                remind_hm = remind_dt.strftime("%H:%M")
+                if remind_date == today_str and remind_hm == now_hm:
+                    messages.append(f"⏰ 提醒：{t['content']}")
+                    t["last_notified"] = today_str
+                    changed = True
+            except ValueError:
+                pass
+
+    state_updates = {}
+    if changed:
+        state["todos"] = todos
+        state_updates["todos"] = todos
+
+    if messages:
+        _log(f"[precise_remind] 精准匹配 {len(messages)} 条提醒 (当前 {now_hm})")
+
+    return {"messages": messages, "state_updates": state_updates}
+
+
+
+
+def edit(params, state, ctx):
+    """
+    修改待办事项的属性。
+
+    params:
+        keyword: str  — 用于匹配待办的关键词
+        index: int    — 1-based 序号（todo.list 返回的编号）
+        new_content: str      — 新的待办内容（传 "" 清除无意义，但允许修改）
+        new_due_date: str     — 新的截止日期 YYYY-MM-DD，传 "" 清除
+        new_remind_at: str    — 新的提醒时间，传 "" 清除
+        new_recur: str        — 新的循环规则 daily/weekday/weekly/monthly/""，传 "" 清除
+        new_recur_spec: dict  — 新的循环细节，传 {} 清除
+    """
+    keyword = (params.get("keyword") or "").strip().lower()
+    index = params.get("index")
+
+    if not keyword and not index:
+        return {"success": False, "reply": "请告诉我要修改哪个待办（关键词或序号）"}
+
+    # 自动迁移
+    _migrate_reminders_to_todos(state, ctx, ctx.todo_file)
+
+    text = ctx.IO.read_text(ctx.todo_file)
+    if text is None:
+        return {"success": False, "reply": "读取 Todo.md 失败"}
+
+    doing, done = _parse_todo_md(text)
+    todos = state.get("todos", [])
+
+    # ── 定位目标待办 ──
+    matched_idx = -1
+    if index is not None:
+        idx = int(index) - 1  # 转为 0-based
+        if 0 <= idx < len(doing):
+            matched_idx = idx
+        else:
+            return {"success": False, "reply": f"序号 {index} 超出范围（共 {len(doing)} 条待办）"}
+    elif keyword:
+        for i, item in enumerate(doing):
+            if keyword in item["content"].lower():
+                matched_idx = i
+                break
+
+    if matched_idx < 0:
+        return {"success": False, "reply": f"没找到包含「{keyword}」的待办"}
+
+    item = doing[matched_idx]
+    matched_todo = _find_todo_by_content(todos, item["content"])
+
+    # ── 收集要修改的字段 ──
+    changes = []
+
+    if "new_content" in params and params["new_content"] is not None:
+        new_content = params["new_content"].strip()
+        if new_content:
+            old_content = item["content"]
+            item["content"] = new_content
+            if matched_todo:
+                matched_todo["content"] = new_content
+            changes.append(f"内容: 「{old_content[:20]}」→「{new_content[:20]}」")
+
+    if "new_due_date" in params:
+        val = (params["new_due_date"] or "").strip()
+        if matched_todo:
+            if val:
+                matched_todo["due_date"] = val
+                changes.append(f"截止日: {val}")
+            else:
+                matched_todo.pop("due_date", None)
+                changes.append("截止日: 已清除")
+
+    if "new_remind_at" in params:
+        val = (params["new_remind_at"] or "").strip()
+        if matched_todo:
+            if val:
+                matched_todo["remind_at"] = val
+                changes.append(f"提醒时间: {val}")
+            else:
+                matched_todo.pop("remind_at", None)
+                changes.append("提醒时间: 已清除")
+
+    if "new_recur" in params:
+        val = (params["new_recur"] or "").strip()
+        if matched_todo:
+            if val:
+                matched_todo["recur"] = val
+                changes.append(f"循环: {val}")
+            else:
+                matched_todo.pop("recur", None)
+                matched_todo.pop("recur_spec", None)
+                changes.append("循环: 已取消")
+
+    if "new_recur_spec" in params:
+        val = params["new_recur_spec"]
+        if matched_todo and isinstance(val, dict):
+            if val:
+                matched_todo["recur_spec"] = val
+            else:
+                matched_todo.pop("recur_spec", None)
+
+    if not changes:
+        return {"success": False, "reply": "没有指定要修改的属性"}
+
+    # ── 重建 Todo.md 行 ──
+    if matched_todo:
+        doing[matched_idx]["raw"] = _build_todo_line(matched_todo)
+    else:
+        # 没有对应 state todo（可能是旧数据），只更新 md 行中的 content
+        old_raw = doing[matched_idx]["raw"]
+        new_raw = re.sub(r'- \[[ x]\]\s*[^🔁📅⏰`]+', f'- [ ] {item["content"]} ', old_raw)
+        doing[matched_idx]["raw"] = new_raw.strip()
+
+    new_text = _rebuild_todo_md(doing, done)
+    ok = ctx.IO.write_text(ctx.todo_file, new_text)
+
+    if ok:
+        change_desc = "；".join(changes)
+        _log(f"[todo.edit] 已修改: {change_desc}")
+        return {
+            "success": True,
+            "reply": f"已修改待办 ✏️\n{change_desc}",
+            "state_updates": {"todos": todos},
+        }
+    return {"success": False, "reply": "写入 Todo.md 失败"}
+
+
+def delete(params, state, ctx):
+    """
+    删除（废弃）待办事项，不记入已完成。
+    用于用户说"不做了/删掉/取消这个待办"的场景。
+    注意区分：用户说"做完了"→todo.done，"不做了/删掉"→todo.delete。
+
+    params:
+        keyword: str  — 用于匹配待办的关键词
+        indices: str  — 序号批量删除，支持 "3" / "2-7" / "1,3,5"
+    """
+    keyword = (params.get("keyword") or "").strip().lower()
+    indices_str = (params.get("indices") or "").strip()
+
+    if not keyword and not indices_str:
+        return {"success": False, "reply": "请告诉我要删除哪个待办"}
+
+    # 自动迁移
+    _migrate_reminders_to_todos(state, ctx, ctx.todo_file)
+
+    text = ctx.IO.read_text(ctx.todo_file)
+    if text is None:
+        return {"success": False, "reply": "读取 Todo.md 失败"}
+
+    doing, done = _parse_todo_md(text)
+    todos = state.get("todos", [])
+
+    deleted_names = []
+
+    if indices_str:
+        # ── 序号模式：批量删除 ──
+        target_indices = _parse_indices(indices_str, len(doing))
+        if not target_indices:
+            return {"success": False, "reply": f"无法解析序号「{indices_str}」，或序号超出范围"}
+
+        for idx in sorted(target_indices, reverse=True):
+            if 0 <= idx < len(doing):
+                popped = doing.pop(idx)
+                deleted_names.append(popped["content"])
+                # 从 state.todos 中也移除
+                matched_todo = _find_todo_by_content(todos, popped["content"])
+                if matched_todo:
+                    todos.remove(matched_todo)
+    else:
+        # ── 关键词模式：单条删除 ──
+        matched_idx = -1
+        for i, item in enumerate(doing):
+            if keyword in item["content"].lower():
+                matched_idx = i
+                break
+
+        if matched_idx < 0:
+            return {"success": False, "reply": f"没找到包含「{keyword}」的待办"}
+
+        popped = doing.pop(matched_idx)
+        deleted_names.append(popped["content"])
+        matched_todo = _find_todo_by_content(todos, popped["content"])
+        if matched_todo:
+            todos.remove(matched_todo)
+
+    if not deleted_names:
+        return {"success": False, "reply": "没有找到对应的待办"}
+
+    # 重建 Todo.md（不放到已完成区，直接删除）
+    new_text = _rebuild_todo_md(doing, done)
+    ok = ctx.IO.write_text(ctx.todo_file, new_text)
+
+    if ok:
+        names = "、".join(f"「{c[:20]}」" for c in deleted_names)
+        _log(f"[todo.delete] 已删除 {len(deleted_names)} 条: {names}")
+        return {
+            "success": True,
+            "reply": f"已删除 {len(deleted_names)} 条待办 🗑️\n{names}",
+            "state_updates": {"todos": todos},
+        }
+    return {"success": False, "reply": "写入 Todo.md 失败"}
 
 
 def remind_cancel(params, state, ctx):
@@ -969,6 +1237,8 @@ def remind_cancel(params, state, ctx):
 SKILL_REGISTRY = {
     "todo.add": add,
     "todo.done": complete,
+    "todo.edit": edit,
+    "todo.delete": delete,
     "todo.list": list_todos,
     "todo.remind_cancel": remind_cancel,
 }

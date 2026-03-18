@@ -752,8 +752,7 @@ Web 服务与消息处理服务共享同一个 Flask 进程，通过路由前缀
 | `ADMIN_TOKEN` | 是 | — | 管理员 Web 密钥 |
 | `DAILY_MESSAGE_LIMIT` | 否 | `50` | 每用户每日消息上限 |
 | `WEB_TOKEN_EXPIRE_HOURS` | 否 | `24` | Web 令牌有效时长（小时） |
-| `SENIVERSE_KEY` | 否 | — | 心知天气 API Key |
-| `WEATHER_CITY` | 否 | — | 天气查询城市 |
+| `WEATHER_CITY` | 否 | `深圳` | 天气查询城市（Open-Meteo 免费无需 Key） |
 | `INACTIVE_DAYS_THRESHOLD` | 否 | `7` | 不活跃天数阈值 |
 | `COMPANION_QUIET_START` | 否 | `23` | 陪伴静默开始时间 |
 | `COMPANION_QUIET_END` | 否 | `7` | 陪伴静默结束时间 |

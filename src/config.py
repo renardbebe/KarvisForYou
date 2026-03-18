@@ -31,8 +31,7 @@ TENCENT_APPID = os.environ.get("TENCENT_APPID", "")
 TENCENT_SECRET_ID = os.environ.get("TENCENT_SECRET_ID", "")
 TENCENT_SECRET_KEY = os.environ.get("TENCENT_SECRET_KEY", "")
 
-# ============ 心知天气 API ============
-WEATHER_API_KEY = os.environ.get("SENIVERSE_KEY", "")
+# ============ 天气（Open-Meteo，免费无需 Key）============
 WEATHER_CITY = os.environ.get("WEATHER_CITY", "北京")
 
 # ============ 运行参数 ============

@@ -517,7 +517,8 @@ def _select_rules(state, payload=None, ctx=None):
 
     # 读书/影视：仅关键词触发（去掉 state 持久字段避免每条消息都注入）
     _BOOKS_KW = ("看了", "读了", "推荐", "这本书", "书摘", "金句", "总结一下",
-                 "在读", "在看", "电影", "剧", "纪录片", "动画", "影视")
+                 "在读", "在看", "书单", "想看的书", "想读", "读完", "看完", "搁置",
+                 "电影", "剧", "纪录片", "动画", "影视")
     if any(kw in user_text for kw in _BOOKS_KW):
         segments.append(prompts.RULES_BOOKS_MEDIA)
         tags.append("books_media")
@@ -803,6 +804,7 @@ def process(payload, send_fn=None, ctx=None):
                           "todo.add", "todo.done", "todo.list", "todo.remind_cancel",
                           "settings.nickname", "settings.ai_name", "settings.soul",
                           "settings.info", "settings.skills", "web.token",
+                          "weather.query",
                           "discuss.start", "discuss.reply", "discuss.conclude", "discuss.cancel")
     if (state.get("reflect_pending")
             and payload.get("type") != "system"
@@ -1091,7 +1093,7 @@ def _run_agent_loop(system_prompt, user_message, first_decision, first_context, 
 # ── V4: 不需要 Flash 加工的简单 skill ──
 _SIMPLE_SKILLS = frozenset({
     "note.save", "classify.archive", "todo.add", "todo.done",
-    "book.create", "book.excerpt", "book.thought", "book.summary", "book.quotes",
+    "book.create", "book.excerpt", "book.thought", "book.summary", "book.quotes", "book.list", "book.status",
     "media.create", "media.thought",
     "mood.generate", "voice.journal",
     "settings.nickname", "settings.ai_name", "settings.soul", "settings.info",
@@ -1105,12 +1107,12 @@ _SIMPLE_SKILLS = frozenset({
 # ── 速记智能过滤：规则预筛跳过集合（V-Web-01）──
 # 这些 skill 的消息已由对应 handler 结构化处理，无需重复写入 Quick-Notes
 _SKIP_NOTE_SKILLS = frozenset({
-    "todo.add", "todo.done", "todo.list",
+    "todo.add", "todo.done", "todo.edit", "todo.delete", "todo.list",
     "habit.propose", "habit.nudge", "habit.status", "habit.complete",
     "decision.record", "decision.review", "decision.list",
-    "book.create", "book.excerpt", "book.thought", "book.summary", "book.quotes",
+    "book.create", "book.excerpt", "book.thought", "book.summary", "book.quotes", "book.list", "book.status",
     "media.create", "media.thought",
-    "web.token",
+    "web.token", "weather.query",
     "settings.nickname", "settings.ai_name", "settings.soul", "settings.info",
     "deep.dive",
 })

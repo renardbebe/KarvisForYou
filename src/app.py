@@ -31,7 +31,7 @@ from config import (
     WEWORK_TOKEN, ENCODING_AES_KEY,
     TENCENT_APPID, TENCENT_SECRET_ID, TENCENT_SECRET_KEY,
     MSG_CACHE_EXPIRE_SECONDS,
-    WEATHER_API_KEY, WEATHER_CITY,
+    WEATHER_CITY,
     SCHEDULER_TICK_MINUTES, SCHEDULER_DEFAULT_WAKE, SCHEDULER_DEFAULT_SLEEP,
     SCHEDULER_WEEKEND_SHIFT, SCHEDULER_PUSH_MAX_DAILY, SCHEDULER_MIN_PUSH_GAP,
     SERVER_PORT,
@@ -947,6 +947,23 @@ def _run_system_action_for_user(action, data, uid, ctx):
         _log(f"[system_action] todo_remind 完成, user={uid}, 耗时={time.time()-t0:.1f}s")
         return {"ok": True, "sent": len(messages)}
 
+    if action == "precise_remind":
+        from skills.todo_manage import check_precise_reminders
+        state = read_state_cached(ctx) or {}
+        result = check_precise_reminders(state, ctx=ctx, todo_file=ctx.todo_file)
+        messages = result.get("messages", [])
+        state_updates = result.get("state_updates", {})
+        if messages:
+            combined = "\n".join(messages)
+            channel_router.send_message(uid, combined)
+        if state_updates:
+            for k, v in state_updates.items():
+                state[k] = v
+            write_state_and_update_cache(state, ctx)
+        if messages:
+            _log(f"[system_action] precise_remind: 推送 {len(messages)} 条, user={uid}")
+        return {"ok": True, "sent": len(messages)}
+
     if action in ("morning_report", "evening_checkin", "daily_report"):
         context = {}
         try:
@@ -1621,85 +1638,15 @@ def _check_pending_todos(ctx):
 
 def _build_weather_context():
     """
-    V3-F13: 获取天气信息，供 morning_report 注入。
-    优先使用心知天气 API（需 Key），fallback 到 wttr.in（免费无需 Key）。
-    返回包含温度、天气、湿度、风力、紫外线等信息的 dict，供 AI 生成穿搭出行建议。
+    获取天气信息，供 morning_report 注入。
+    统一调用 weather_query.fetch_weather()（Open-Meteo API）。
     """
-    # 方案 1：心知天气（有 Key 时使用）
-    if WEATHER_API_KEY:
-        try:
-            resp = requests.get(
-                "https://api.seniverse.com/v3/weather/daily.json",
-                params={
-                    "key": WEATHER_API_KEY,
-                    "location": WEATHER_CITY,
-                    "language": "zh-Hans",
-                    "unit": "c",
-                    "start": 0,
-                    "days": 1
-                },
-                timeout=5
-            )
-            if resp.status_code == 200:
-                data = resp.json()["results"][0]["daily"][0]
-                weather = {
-                    "city": WEATHER_CITY,
-                    "weather_day": data.get("text_day", ""),
-                    "weather_night": data.get("text_night", ""),
-                    "high": data.get("high", ""),
-                    "low": data.get("low", ""),
-                }
-                _log(f"[Weather] 心知天气: {WEATHER_CITY} {weather['weather_day']} {weather['low']}~{weather['high']}°C")
-                return weather
-            else:
-                _log(f"[Weather] 心知天气 API 返回非 200: {resp.status_code}, fallback 到 wttr.in")
-        except Exception as e:
-            _log(f"[Weather] 心知天气获取失败: {e}, fallback 到 wttr.in")
-
-    # 方案 2：wttr.in（免费，无需 Key，信息丰富）
     try:
-        resp = requests.get(
-            f"https://wttr.in/{WEATHER_CITY}",
-            params={"format": "j1"},
-            headers={"Accept-Language": "zh"},
-            timeout=8
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            current = data.get("current_condition", [{}])[0]
-            today_forecast = data.get("weather", [{}])[0]
-            hourly = today_forecast.get("hourly", [])
-
-            # 提取白天时段（8-18点）的降雨概率峰值
-            rain_chance_max = 0
-            for h in hourly:
-                hour_val = int(h.get("time", "0")) // 100
-                if 8 <= hour_val <= 18:
-                    rain_chance_max = max(rain_chance_max, int(h.get("chanceofrain", "0")))
-
-            weather = {
-                "city": WEATHER_CITY,
-                "weather_day": current.get("lang_zh", [{}])[0].get("value", current.get("weatherDesc", [{}])[0].get("value", "")),
-                "high": today_forecast.get("maxtempC", ""),
-                "low": today_forecast.get("mintempC", ""),
-                "feels_like": current.get("FeelsLikeC", ""),
-                "humidity": current.get("humidity", ""),
-                "wind_speed_kmph": current.get("windspeedKmph", ""),
-                "uv_index": today_forecast.get("uvIndex", ""),
-                "rain_chance": str(rain_chance_max),
-                "sunrise": today_forecast.get("astronomy", [{}])[0].get("sunrise", ""),
-                "sunset": today_forecast.get("astronomy", [{}])[0].get("sunset", ""),
-            }
-            _log(f"[Weather] wttr.in: {WEATHER_CITY} {weather['weather_day']} "
-                 f"{weather['low']}~{weather['high']}°C 体感{weather['feels_like']}°C "
-                 f"湿度{weather['humidity']}% 降雨{weather['rain_chance']}%")
-            return weather
-        else:
-            _log(f"[Weather] wttr.in 返回非 200: {resp.status_code}")
+        from skills.weather_query import fetch_weather
+        return fetch_weather() or {}
     except Exception as e:
-        _log(f"[Weather] wttr.in 获取失败: {e}")
-
-    return {}
+        _log(f"[Weather] 获取失败: {e}")
+        return {}
 
 
 # ============ V8: 智能调度引擎 ============
@@ -2108,6 +2055,9 @@ def _setup_builtin_scheduler():
         ("weekly_review",   {"trigger": "cron", "day_of_week": "sun", "hour": 21, "minute": 30}),
         ("monthly_review",  {"trigger": "cron", "day": "last", "hour": 22, "minute": 0}),
         ("finance_monthly_report", {"trigger": "cron", "day": 8, "hour": 20, "minute": 0}),
+
+        # 精准提醒：每分钟检查有精确时间的待办提醒
+        ("precise_remind",  {"trigger": "cron", "minute": "*/1"}),
 
         # V8 新增：智能调度心跳
         ("scheduler_tick",  {"trigger": "interval", "minutes": SCHEDULER_TICK_MINUTES}),

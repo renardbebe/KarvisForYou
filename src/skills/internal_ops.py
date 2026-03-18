@@ -122,6 +122,30 @@ def search_files(params, state, ctx):
             files_to_read[f"work_{d}"] = f"{ctx.work_notes_dir}/{d}.md"
             files_to_read[f"fun_{d}"] = f"{ctx.fun_notes_dir}/{d}.md"
 
+        # 读书笔记：书单索引 + 各本书笔记
+        book_list_file = f"{ctx.book_notes_dir}/_书单.md"
+        files_to_read["book_list"] = book_list_file
+        try:
+            book_children = ctx.IO.list_children(ctx.book_notes_dir)
+            if book_children:
+                for c in book_children:
+                    name = c.get("name", "")
+                    if name.endswith(".md") and name != "_书单.md":
+                        files_to_read[f"book_{name}"] = f"{ctx.book_notes_dir}/{name}"
+        except Exception:
+            pass
+
+        # 影视笔记：各影视笔记
+        try:
+            media_children = ctx.IO.list_children(ctx.media_notes_dir)
+            if media_children:
+                for c in media_children:
+                    name = c.get("name", "")
+                    if name.endswith(".md"):
+                        files_to_read[f"media_{name}"] = f"{ctx.media_notes_dir}/{name}"
+        except Exception:
+            pass
+
     futures = {k: executor.submit(ctx.IO.read_text, v) for k, v in files_to_read.items()}
     results_text = {}
     for k, fut in futures.items():
