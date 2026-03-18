@@ -639,6 +639,14 @@ def _build_state_summary(state):
         reflect_cat = state.get("reflect_category", "")
         parts.append(f"深度自问进行中: [{reflect_cat}] \"{reflect_q}\"")
 
+    # 讨论模式状态
+    if state.get("discuss_pending"):
+        discuss_topic = state.get("discuss_topic", "")
+        discuss_history = state.get("discuss_history", [])
+        rounds = len([m for m in discuss_history if m.get("role") == "user"])
+        parts.append(f"讨论进行中: 「{discuss_topic}」(已 {rounds} 轮)")
+
+
     # 活跃书籍/影视
     active_book = state.get("active_book", "")
     if active_book:
@@ -807,14 +815,22 @@ def process(payload, send_fn=None, ctx=None):
     #    Stage 2: Flash 后判 — 回复发出后异步调 Flash 判断是否值得写入
     primary_skill = _get_primary_skill(decision)
 
-    # Reflect 防护 — reflect_pending 时，非 reflect skill 强制重路由（优先级低于 checkin）
+    # Reflect 防护 — reflect_pending 时，非 reflect skill 有条件地重路由
+    # 核心改进：如果 LLM 已判断用户意图是对话/提问（ignore）、设置、待办等，
+    # 说明用户不是在回答自问，不应强制重路由
     _REFLECT_SKILLS = ("reflect.answer", "reflect.skip", "reflect.history", "reflect.push")
     _CHECKIN_SKILLS = ("checkin.answer", "checkin.skip", "checkin.cancel", "checkin.start")
+    _NO_REROUTE_SKILLS = ("ignore",  # 对话/提问/闲聊
+                          "todo.add", "todo.done", "todo.list", "todo.remind_cancel",
+                          "settings.nickname", "settings.ai_name", "settings.soul",
+                          "settings.info", "settings.skills", "web.token",
+                          "discuss.start", "discuss.reply", "discuss.conclude", "discuss.cancel")
     if (state.get("reflect_pending")
             and not state.get("checkin_pending")
             and payload.get("type") != "system"
             and primary_skill not in _REFLECT_SKILLS
-            and primary_skill not in _CHECKIN_SKILLS):
+            and primary_skill not in _CHECKIN_SKILLS
+            and primary_skill not in _NO_REROUTE_SKILLS):
         _log(f"[Brain] 深度自问防护: {primary_skill} → reflect.answer")
         decision["skill"] = "reflect.answer"
         decision["params"] = {"answer": user_text}
@@ -1107,6 +1123,7 @@ _SIMPLE_SKILLS = frozenset({
     "habit.propose", "habit.nudge", "habit.status", "habit.complete",
     "decision.record", "dynamic",
     "reflect.push", "reflect.answer", "reflect.skip", "reflect.history",
+    "discuss.start", "discuss.reply", "discuss.conclude", "discuss.cancel",
 })
 
 # ── 速记智能过滤：规则预筛跳过集合（V-Web-01）──
