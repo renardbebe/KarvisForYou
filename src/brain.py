@@ -21,7 +21,7 @@ except ImportError:
 from config import (
     DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL,
     QWEN_API_KEY, QWEN_BASE_URL, QWEN_MODEL, QWEN_VL_MODEL,
-    CHECKIN_TIMEOUT_SECONDS, SCHEDULER_RHYTHM_WINDOW,
+    SCHEDULER_RHYTHM_WINDOW,
     ADMIN_USER_ID, ALERT_SLOW_THRESHOLD, ALERT_SLOW_CONSECUTIVE,
     ALERT_COOLDOWN_SECONDS,
 )
@@ -616,23 +616,6 @@ def _build_state_summary(state):
     """从 state 中提取关键信息，构建给 LLM 看的摘要"""
     parts = []
 
-    # 打卡状态
-    if state.get("checkin_pending"):
-        step = state.get("checkin_step", 0)
-        questions = [
-            "今天做了什么？",
-            "今天状态打几分？(1-10)",
-            "什么事让你纠结？",
-            "脑子里最常冒出的念头是什么？"
-        ]
-        q = questions[step - 1] if 1 <= step <= 4 else "未知"
-        parts.append(f"打卡进行中: 第 {step}/4 题, 当前问题: \"{q}\"")
-        answers = state.get("checkin_answers", [])
-        if answers:
-            parts.append(f"已回答 {len(answers)} 题")
-    else:
-        parts.append("未在打卡")
-
     # 深度自问状态
     if state.get("reflect_pending"):
         reflect_q = state.get("reflect_question", "")
@@ -761,9 +744,6 @@ def process(payload, send_fn=None, ctx=None):
     t_state = _time.time()
     _log(f"[Brain][耗时] state读取: {t_state - t_token:.1f}s")
 
-    # 3. 检查打卡超时
-    _check_checkin_timeout(state)
-
     # 4. 记录用户消息到短期记忆 + 更新 nudge_state（F5）
     if user_text and payload.get("type") != "system":
         add_message_to_state(state, "user", user_text)
@@ -819,17 +799,14 @@ def process(payload, send_fn=None, ctx=None):
     # 核心改进：如果 LLM 已判断用户意图是对话/提问（ignore）、设置、待办等，
     # 说明用户不是在回答自问，不应强制重路由
     _REFLECT_SKILLS = ("reflect.answer", "reflect.skip", "reflect.history", "reflect.push")
-    _CHECKIN_SKILLS = ("checkin.answer", "checkin.skip", "checkin.cancel", "checkin.start")
     _NO_REROUTE_SKILLS = ("ignore",  # 对话/提问/闲聊
                           "todo.add", "todo.done", "todo.list", "todo.remind_cancel",
                           "settings.nickname", "settings.ai_name", "settings.soul",
                           "settings.info", "settings.skills", "web.token",
                           "discuss.start", "discuss.reply", "discuss.conclude", "discuss.cancel")
     if (state.get("reflect_pending")
-            and not state.get("checkin_pending")
             and payload.get("type") != "system"
             and primary_skill not in _REFLECT_SKILLS
-            and primary_skill not in _CHECKIN_SKILLS
             and primary_skill not in _NO_REROUTE_SKILLS):
         _log(f"[Brain] 深度自问防护: {primary_skill} → reflect.answer")
         decision["skill"] = "reflect.answer"
@@ -838,7 +815,7 @@ def process(payload, send_fn=None, ctx=None):
         primary_skill = "reflect.answer"
 
     _pending_note_filter = False  # 是否需要 Flash 后判
-    if payload.get("type") != "system" and primary_skill not in ("checkin.answer", "checkin.skip", "checkin.cancel", "checkin.start", "reflect.answer", "reflect.skip"):
+    if payload.get("type") != "system" and primary_skill not in ("reflect.answer", "reflect.skip"):
         if primary_skill in _SKIP_NOTE_SKILLS:
             _log(f"[Brain][NoteFilter] 规则跳过: skill={primary_skill}")
         elif primary_skill == "note.save":
@@ -1114,7 +1091,6 @@ def _run_agent_loop(system_prompt, user_message, first_decision, first_context, 
 # ── V4: 不需要 Flash 加工的简单 skill ──
 _SIMPLE_SKILLS = frozenset({
     "note.save", "classify.archive", "todo.add", "todo.done",
-    "checkin.start", "checkin.answer", "checkin.skip", "checkin.cancel",
     "book.create", "book.excerpt", "book.thought", "book.summary", "book.quotes",
     "media.create", "media.thought",
     "mood.generate", "voice.journal",
@@ -1539,28 +1515,6 @@ def _update_nudge_state(state):
             nudge["streak"] = 1
         nudge["last_message_date"] = today_str
 
-
-def _check_checkin_timeout(state):
-    """检查打卡是否超时"""
-    if not state.get("checkin_pending"):
-        return
-
-    sent_at = state.get("checkin_sent_at", "")
-    if not sent_at:
-        return
-
-    try:
-        beijing_tz = timezone(timedelta(hours=8))
-        now = datetime.now(beijing_tz)
-        sent_time = datetime.strptime(sent_at, "%Y-%m-%d %H:%M")
-        sent_time = sent_time.replace(tzinfo=beijing_tz)
-        diff = (now - sent_time).total_seconds()
-        if diff > CHECKIN_TIMEOUT_SECONDS:
-            _log(f"[Brain] 打卡超时 ({diff:.0f}s)")
-            from skills import checkin_flow
-            checkin_flow.finish(state, timeout=True)
-    except Exception as e:
-        _log(f"[Brain] 打卡超时检查异常: {e}")
 
 
 # ============ V8: 用户节奏学习 ============
