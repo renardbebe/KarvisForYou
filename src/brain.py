@@ -804,7 +804,7 @@ def process(payload, send_fn=None, ctx=None):
                           "todo.add", "todo.done", "todo.list", "todo.remind_cancel",
                           "settings.nickname", "settings.ai_name", "settings.soul",
                           "settings.info", "settings.skills", "web.token",
-                          "weather.query",
+                          "weather.query", "web.search",
                           "discuss.start", "discuss.reply", "discuss.conclude", "discuss.cancel")
     if (state.get("reflect_pending")
             and payload.get("type") != "system"
@@ -846,6 +846,24 @@ def process(payload, send_fn=None, ctx=None):
             t_agent = _time.time()
             _log(f"[Brain][耗时] Agent Loop: {t_agent - t_skill:.1f}s")
             t_skill = t_agent
+
+    # V-Search: web.search 搜索结果二次加工
+    # 搜索完成后把结果注入上下文，再调用主模型生成基于搜索结果的自然回复
+    if (len(steps) == 1 and steps[0].get("skill") == "web.search"
+            and step_results and isinstance(step_results[0].get("result"), dict)):
+        search_data = step_results[0]["result"]
+        search_result = search_data.get("search_result", "")
+        if search_result:
+            _log(f"[Brain][Search] 搜索结果二次加工: result_len={len(search_result)}")
+            t_search_start = _time.time()
+            search_reply = _generate_reply_with_search(
+                system_prompt, user_message, search_result, decision
+            )
+            t_search_end = _time.time()
+            _log(f"[Brain][Search][耗时] 二次回复: {t_search_end - t_search_start:.1f}s")
+            if search_reply:
+                decision["reply"] = search_reply
+            t_skill = t_search_end
 
     # 9. 合并状态更新（从所有 step 结果中收集）
     for sr in step_results:
@@ -1112,7 +1130,7 @@ _SKIP_NOTE_SKILLS = frozenset({
     "decision.record", "decision.review", "decision.list",
     "book.create", "book.excerpt", "book.thought", "book.summary", "book.quotes", "book.list", "book.status",
     "media.create", "media.thought",
-    "web.token", "weather.query",
+    "web.token", "weather.query", "web.search",
     "settings.nickname", "settings.ai_name", "settings.soul", "settings.info",
     "deep.dive",
 })
@@ -1286,6 +1304,49 @@ def _call_flash_for_reply(user_text, decision, steps, step_results):
         return reply
     except Exception as e:
         _log(f"[Brain][V4] Flash 回复生成失败: {e}")
+        return None
+
+
+def _generate_reply_with_search(system_prompt, user_message, search_result, decision):
+    """
+    V-Search: 基于联网搜索结果生成最终回复。
+    
+    搜索完成后，把搜索结果作为上下文注入，让主模型结合用户消息和搜索信息
+    生成自然、准确、有温度的回复。
+    """
+    try:
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+            # 第一轮：LLM 的搜索决策
+            {"role": "assistant", "content": json.dumps({
+                "thinking": decision.get("thinking", ""),
+                "skill": "web.search",
+                "params": decision.get("params", {}),
+            }, ensure_ascii=False)},
+            # 搜索结果返回
+            {"role": "user", "content": json.dumps({
+                "type": "search_result",
+                "data": search_result,
+                "instruction": "联网搜索结果已返回。请基于搜索结果，结合用户的消息上下文，"
+                               "生成自然、准确的回复。按正常 JSON 格式输出（skill 填 ignore）。"
+                               "不要机械地列出搜索结果，而是像朋友聊天一样自然地融入信息。"
+            }, ensure_ascii=False)}
+        ]
+
+        raw = call_llm(messages, model_tier="main", max_tokens=500, temperature=0.4)
+        if not raw:
+            return None
+
+        parsed = _parse_llm_output(raw)
+        if parsed and parsed.get("reply"):
+            return parsed["reply"]
+
+        # 如果解析失败，尝试直接用原始文本
+        return raw.strip() if raw else None
+
+    except Exception as e:
+        _log(f"[Brain][Search] 二次回复生成失败: {e}")
         return None
 
 def _save_to_quick_notes(payload, state, ctx):

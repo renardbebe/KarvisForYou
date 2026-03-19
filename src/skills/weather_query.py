@@ -101,85 +101,111 @@ def _geocode(city: str) -> tuple:
     return None, None, city
 
 
-def fetch_weather(city: str = None) -> dict:
+def fetch_weather(city: str = None, _retries: int = 3) -> dict:
     """
     统一天气获取函数（供 skill handler 和 app.py morning_report 调用）。
+
+    内置重试机制：遇到 5xx / 超时 / 网络错误自动重试（默认 3 次，间隔递增）。
 
     返回 dict 或 None:
         city, weather_desc, high, low, feels_like, humidity,
         wind_speed_kmph, uv_index, rain_chance, sunrise, sunset
     """
+    import time as _time
+
     city = city or WEATHER_CITY or "北京"
     lat, lon, resolved_name = _geocode(city)
     if lat is None:
         return None
 
-    try:
-        resp = requests.get(
-            "https://api.open-meteo.com/v1/forecast",
-            params={
-                "latitude": lat,
-                "longitude": lon,
-                "current": ",".join([
-                    "temperature_2m", "relative_humidity_2m",
-                    "apparent_temperature", "weather_code",
-                    "wind_speed_10m",
-                ]),
-                "daily": ",".join([
-                    "weather_code", "temperature_2m_max", "temperature_2m_min",
-                    "precipitation_probability_max", "uv_index_max",
-                    "sunrise", "sunset",
-                ]),
-                "timezone": "auto",
-                "forecast_days": 1,
-            },
-            timeout=8
-        )
-        if resp.status_code != 200:
-            _log(f"[weather] Open-Meteo 返回 {resp.status_code}")
+    last_err = None
+    for attempt in range(1, _retries + 1):
+        try:
+            resp = requests.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params={
+                    "latitude": lat,
+                    "longitude": lon,
+                    "current": ",".join([
+                        "temperature_2m", "relative_humidity_2m",
+                        "apparent_temperature", "weather_code",
+                        "wind_speed_10m",
+                    ]),
+                    "daily": ",".join([
+                        "weather_code", "temperature_2m_max", "temperature_2m_min",
+                        "precipitation_probability_max", "uv_index_max",
+                        "sunrise", "sunset",
+                    ]),
+                    "timezone": "auto",
+                    "forecast_days": 1,
+                },
+                timeout=10
+            )
+
+            # 5xx 可重试
+            if resp.status_code >= 500:
+                _log(f"[weather] Open-Meteo 返回 {resp.status_code} (尝试 {attempt}/{_retries})")
+                last_err = f"HTTP {resp.status_code}"
+                if attempt < _retries:
+                    _time.sleep(attempt * 2)  # 2s, 4s 递增
+                    continue
+                return None
+
+            if resp.status_code != 200:
+                _log(f"[weather] Open-Meteo 返回 {resp.status_code}")
+                return None
+
+            data = resp.json()
+            current = data.get("current", {})
+            daily = data.get("daily", {})
+
+            weather_code = current.get("weather_code", -1)
+            daily_code = daily.get("weather_code", [None])[0]
+
+            # 当前天气描述
+            weather_desc = _WMO_CODES.get(weather_code, "未知")
+            # 日间天气描述（如果和当前不同则补充）
+            weather_day = _WMO_CODES.get(daily_code, weather_desc)
+
+            # 提取日出日落，截取时间部分
+            sunrise_raw = (daily.get("sunrise") or [""])[0]
+            sunset_raw = (daily.get("sunset") or [""])[0]
+            sunrise = sunrise_raw.split("T")[1] if "T" in sunrise_raw else sunrise_raw
+            sunset = sunset_raw.split("T")[1] if "T" in sunset_raw else sunset_raw
+
+            weather = {
+                "city": resolved_name,
+                "weather_desc": weather_desc,
+                "weather_day": weather_day,
+                "high": str(daily.get("temperature_2m_max", [""])[0]),
+                "low": str(daily.get("temperature_2m_min", [""])[0]),
+                "feels_like": str(current.get("apparent_temperature", "")),
+                "humidity": str(current.get("relative_humidity_2m", "")),
+                "wind_speed_kmph": str(current.get("wind_speed_10m", "")),
+                "uv_index": str(daily.get("uv_index_max", [""])[0]),
+                "rain_chance": str(daily.get("precipitation_probability_max", ["0"])[0]),
+                "sunrise": sunrise,
+                "sunset": sunset,
+            }
+
+            _log(f"[weather] Open-Meteo: {resolved_name} {weather_desc} "
+                 f"{weather['low']}~{weather['high']}°C 体感{weather['feels_like']}°C "
+                 f"湿度{weather['humidity']}% 降雨{weather['rain_chance']}%")
+            return weather
+
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+            _log(f"[weather] Open-Meteo 网络异常 (尝试 {attempt}/{_retries}): {e}")
+            last_err = str(e)
+            if attempt < _retries:
+                _time.sleep(attempt * 2)
+                continue
+
+        except Exception as e:
+            _log(f"[weather] Open-Meteo 获取失败: {e}")
             return None
 
-        data = resp.json()
-        current = data.get("current", {})
-        daily = data.get("daily", {})
-
-        weather_code = current.get("weather_code", -1)
-        daily_code = daily.get("weather_code", [None])[0]
-
-        # 当前天气描述
-        weather_desc = _WMO_CODES.get(weather_code, "未知")
-        # 日间天气描述（如果和当前不同则补充）
-        weather_day = _WMO_CODES.get(daily_code, weather_desc)
-
-        # 提取日出日落，截取时间部分
-        sunrise_raw = (daily.get("sunrise") or [""])[0]
-        sunset_raw = (daily.get("sunset") or [""])[0]
-        sunrise = sunrise_raw.split("T")[1] if "T" in sunrise_raw else sunrise_raw
-        sunset = sunset_raw.split("T")[1] if "T" in sunset_raw else sunset_raw
-
-        weather = {
-            "city": resolved_name,
-            "weather_desc": weather_desc,
-            "weather_day": weather_day,
-            "high": str(daily.get("temperature_2m_max", [""])[0]),
-            "low": str(daily.get("temperature_2m_min", [""])[0]),
-            "feels_like": str(current.get("apparent_temperature", "")),
-            "humidity": str(current.get("relative_humidity_2m", "")),
-            "wind_speed_kmph": str(current.get("wind_speed_10m", "")),
-            "uv_index": str(daily.get("uv_index_max", [""])[0]),
-            "rain_chance": str(daily.get("precipitation_probability_max", ["0"])[0]),
-            "sunrise": sunrise,
-            "sunset": sunset,
-        }
-
-        _log(f"[weather] Open-Meteo: {resolved_name} {weather_desc} "
-             f"{weather['low']}~{weather['high']}°C 体感{weather['feels_like']}°C "
-             f"湿度{weather['humidity']}% 降雨{weather['rain_chance']}%")
-        return weather
-
-    except Exception as e:
-        _log(f"[weather] Open-Meteo 获取失败: {e}")
-        return None
+    _log(f"[weather] Open-Meteo {_retries} 次重试均失败: {last_err}")
+    return None
 
 
 # ============ Skill Handler ============
