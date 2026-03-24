@@ -1434,6 +1434,15 @@ def _run_companion_check(ctx):
     from config import (COMPANION_SILENT_HOURS, COMPANION_INTERVAL_HOURS,
                         COMPANION_MAX_DAILY, COMPANION_RECENT_HOURS)
 
+    # per-user 频率覆盖
+    user_freq = ctx.get_user_config().get("frequency", {})
+    max_daily = user_freq.get("companion_max", COMPANION_MAX_DAILY)
+
+    # 用户设为 0 表示关闭主动关怀
+    if max_daily <= 0:
+        _log(f"[Companion] 用户已关闭主动关怀 (companion_max=0), 跳过")
+        return None
+
     state = read_state_cached(ctx) or {}
     nudge = state.get("nudge_state", {})
     now = datetime.now(BEIJING_TZ)
@@ -1459,8 +1468,8 @@ def _run_companion_check(ctx):
 
     # 今天已推送 ≥ N 次 → 停止
     companion_count = nudge.get("companion_count_today", 0)
-    if companion_count >= COMPANION_MAX_DAILY:
-        _log(f"[Companion] 今日已推送{companion_count}次, 达到上限, 跳过")
+    if companion_count >= max_daily:
+        _log(f"[Companion] 今日已推送{companion_count}次, 达到上限{max_daily}, 跳过")
         return None
 
     # ── 信号收集 ──
@@ -1811,9 +1820,13 @@ def _scheduler_tick(uid, ctx):
         _log(f"[V8][{uid}] tick: 无 pending 意图")
         return {"evaluated": 0, "executed": 0}
 
+    # per-user 频率覆盖
+    user_freq = ctx.get_user_config().get("frequency", {})
+    push_max = user_freq.get("push_max", SCHEDULER_PUSH_MAX_DAILY)
+
     push_count = sched.get("_push_count_today", 0)
-    if push_count >= SCHEDULER_PUSH_MAX_DAILY:
-        _log(f"[V8][{uid}] tick: 今日推送已达上限 {push_count}/{SCHEDULER_PUSH_MAX_DAILY}")
+    if push_count >= push_max:
+        _log(f"[V8][{uid}] tick: 今日推送已达上限 {push_count}/{push_max}")
         return {"evaluated": len(pending), "executed": 0, "reason": "daily_limit"}
 
     last_push = sched.get("_last_push_time")
@@ -1847,7 +1860,7 @@ def _scheduler_tick(uid, ctx):
 
     executed = 0
     for intent in ready:
-        if push_count + executed >= SCHEDULER_PUSH_MAX_DAILY:
+        if push_count + executed >= push_max:
             break
         try:
             _execute_intent(intent, uid)

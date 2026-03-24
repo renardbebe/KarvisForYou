@@ -327,6 +327,75 @@ def _toggle_skills(ctx, skill_names, disable=True):
         return {"success": True, "reply": f"这些功能已经是{action_word}状态啦~"}
 
 
+def set_frequency(params, state, ctx):
+    """
+    settings.frequency — 调整主动推送频率。
+    用户通过对话说"每天主动询问的次数降低为1次"、"少打扰我"、"多关心我"等触发。
+
+    params:
+        companion_max: int — 每日主动陪伴上限（0=关闭, 1-5）
+        push_max: int — 每日所有推送总上限（1-10）
+        action: str — "query" 查看当前配置 / "set" 设置
+    """
+    from config import COMPANION_MAX_DAILY, SCHEDULER_PUSH_MAX_DAILY
+
+    action = params.get("action", "set")
+    config = ctx.get_user_config()
+    freq = config.get("frequency", {})
+
+    if action == "query":
+        current_companion = freq.get("companion_max", COMPANION_MAX_DAILY)
+        current_push = freq.get("push_max", SCHEDULER_PUSH_MAX_DAILY)
+        return {
+            "success": True,
+            "reply": f"当前设置：每天主动关怀最多 {current_companion} 次，"
+                     f"所有推送总计最多 {current_push} 次。\n"
+                     f"想调整的话直接告诉我就好~"
+        }
+
+    companion_max = params.get("companion_max")
+    push_max = params.get("push_max")
+
+    if companion_max is None and push_max is None:
+        return {"success": False, "reply": "没听清你想怎么调整，可以说「每天最多主动找我1次」或「少打扰我一点」~"}
+
+    changes = []
+
+    if companion_max is not None:
+        companion_max = max(0, min(int(companion_max), 5))
+        freq["companion_max"] = companion_max
+        if companion_max == 0:
+            changes.append("关闭了主动关怀")
+        else:
+            changes.append(f"每天最多主动找你 {companion_max} 次")
+
+    if push_max is not None:
+        push_max = max(1, min(int(push_max), 10))
+        freq["push_max"] = push_max
+        changes.append(f"每天所有推送上限 {push_max} 次")
+
+    config["frequency"] = freq
+    ctx.save_user_config(config)
+
+    _log(f"[Settings] 用户 {ctx.user_id} 设置推送频率: {freq}")
+
+    reply = "好的，已调整：" + "，".join(changes) + "。"
+    if companion_max is not None and companion_max <= 1:
+        reply += "\n会尽量少打扰你的~有事随时找我就好。"
+
+    return {
+        "success": True,
+        "reply": reply,
+        "memory_updates": [
+            {
+                "section": "关键偏好",
+                "action": "upsert",
+                "content": f"用户偏好的推送频率：{'，'.join(changes)}"
+            }
+        ]
+    }
+
+
 # ============ Skill 注册 ============
 
 SKILL_REGISTRY = {
@@ -335,4 +404,5 @@ SKILL_REGISTRY = {
     "settings.soul": set_soul,
     "settings.info": set_info,
     "settings.skills": manage_skills,
+    "settings.frequency": set_frequency,
 }

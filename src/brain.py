@@ -1131,7 +1131,7 @@ _SKIP_NOTE_SKILLS = frozenset({
     "book.create", "book.excerpt", "book.thought", "book.summary", "book.quotes", "book.list", "book.status",
     "media.create", "media.thought",
     "web.token", "weather.query", "web.search",
-    "settings.nickname", "settings.ai_name", "settings.soul", "settings.info",
+    "settings.nickname", "settings.ai_name", "settings.soul", "settings.info", "settings.frequency",
     "deep.dive",
 })
 

@@ -95,6 +95,7 @@ SKILL_PROMPT_LINES = {
     "settings.soul": '**settings.soul** `{style, mode?}` — 调AI风格（mode: set|append|reset）',
     "settings.info": '**settings.info** `{info, category?}` — 记录用户信息（category: occupation/city/pets/people/other）',
     "settings.skills": '**settings.skills** `{action, skill_names?}` — 管理功能（action: list|enable|disable）',
+    "settings.frequency": '**settings.frequency** `{companion_max?, push_max?, action?}` — 调整主动推送频率。companion_max=每日主动关怀次数(0-5)，push_max=每日推送总上限(1-10)，action=query查看当前/set设置',
     "web.token": '**web.token** `{}` — 生成 Web 查看链接',
     # ── 通用操作 ──
     "dynamic": '**dynamic** `{actions: [{op, path, value?}...]}` — 通用状态操作。op: state.set/state.delete/state.push/file.write/file.append。可操作: active_experiment.*/daily_top3/active_book/active_media/pending_decisions/custom.*。优先用专用skill，dynamic是兜底',
@@ -204,6 +205,25 @@ RULES_CORE = """# 决策规则
 - **调整说话风格** → `settings.soul`：用户对你的回复风格有要求。mode 推理：全新要求=set，在现有基础上微调=append，恢复原样=reset
 - **个人信息** → `settings.info`：用户透露职业/城市/宠物/家人等持久性信息。category 从内容推理
 - ⚠️ 边界：用户讲述**别人**的事（"他叫小明"）不触发设置；但如果是在告知你一个重要的人，走 memory_updates
+
+## 推送频率调整
+**意图**：用户想调整你主动找他的频率/次数，或觉得你太烦/太频繁。
+这是一个**明确的操作指令**，不是情感表达。必须路由到 `settings.frequency`，**不要**当成闲聊或情感分析。
+
+### 触发信号
+- 直接说次数：「每天主动询问的次数降低为1次」「一天别超过2次」
+- 频率描述：「少打扰我一点」「别那么频繁」「多关心我一些」
+- 关闭/开启：「别主动找我了」「关掉主动推送」「恢复默认频率」
+- 查询：「你现在一天找我几次」「当前推送频率是多少」
+
+### 参数推理
+- 「降低为1次」「一天最多1次」 → companion_max=1
+- 「少打扰」「别那么频繁」 → companion_max=1（取保守值）
+- 「别主动找我了」「关掉」 → companion_max=0
+- 「多关心我」「可以多找我」 → companion_max=5
+- 「恢复默认」 → companion_max=3
+- 只提"查看/查询" → action="query"
+- ⚠️ **关键**：这类消息的 reply 应确认操作结果（如"好的，已调整为每天最多1次"），**不要**做心理分析或诗意发挥
 
 ## Web 查看链接
 **意图**：用户想查看自己的数据/笔记/记录。 → `web.token`，无需参数
