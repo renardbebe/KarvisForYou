@@ -967,7 +967,9 @@ def _run_system_action_for_user(action, data, uid, ctx):
     if action in ("morning_report", "evening_checkin", "daily_report"):
         context = {}
         try:
-            todo_content = ctx.IO.read_text(ctx.todo_file)
+            # 待办上下文：使用过滤后的数据，避免历史已完成条目干扰 LLM
+            from skills.todo_manage import build_todo_context_for_llm
+            todo_content = build_todo_context_for_llm(ctx, action=action)
             if todo_content:
                 context["todo"] = todo_content[:2000]
             quick_notes = ctx.IO.read_text(ctx.quick_notes_file)

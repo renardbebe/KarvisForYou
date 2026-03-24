@@ -508,7 +508,7 @@ payload 中可能包含 `context` 字段，包含实时的待办列表（todo）
 
 ### evening_checkin（每天 21:00）
 你是主动推送晚间签到，不是在回复用户消息。
-- 先根据 context.todo 汇总今天的待办完成情况
+- 先根据 context.todo 汇总今天的待办完成情况（注意：context.todo 已过滤，只包含「进行中」和「今天完成的」待办，不含历史记录）
 - **如果 context.daily_top3 存在**：列出今天的 Top 3 并询问完成情况，例如"今天的 Top 3 完成得怎么样？\\n1️⃣ xxx\\n2️⃣ yyy\\n3️⃣ zzz"
 - 如果没有 Top 3：用温暖的语气问问用户今天怎么样
 - 晚安提醒，语气温暖简短

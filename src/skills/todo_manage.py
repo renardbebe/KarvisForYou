@@ -818,6 +818,8 @@ def check_todos(state, ctx=None, todo_file=None):
         if recur:
             if t.get("last_notified") == today_str:
                 continue  # 今天已推送
+            if t.get("last_completed") == today_str:
+                continue  # 今天已打卡完成，不再提醒
             if not _should_trigger_today(t, now):
                 continue  # 不在活跃周期
 
@@ -914,6 +916,44 @@ def check_reminders(state, ctx=None, todo_file=None):
     return check_todos(state, ctx=ctx, todo_file=todo_file)
 
 
+def build_todo_context_for_llm(ctx, action="morning_report"):
+    """
+    为 morning_report / evening_checkin 构建过滤后的待办上下文。
+
+    - morning_report：只返回「进行中」区域（不含已完成历史）
+    - evening_checkin：返回「进行中」区域 + 仅今天完成的待办
+
+    解决的问题：之前直接把 Todo.md 全文（含所有历史已完成记录）传给 LLM，
+    导致 LLM 在 evening_checkin 中误将历史完成的待办当成"今天完成的"来汇报。
+    """
+    text = ctx.IO.read_text(ctx.todo_file)
+    if not text:
+        return ""
+
+    doing, done = _parse_todo_md(text)
+    today_str = _now_str()
+
+    lines = []
+
+    # ── 进行中区域（始终包含）──
+    if doing:
+        lines.append("## 进行中")
+        for item in doing:
+            lines.append(item["raw"])
+        lines.append("")
+
+    # ── 已完成区域（仅 evening_checkin 且只含今天完成的）──
+    if action == "evening_checkin" and done:
+        today_done = [item for item in done if item.get("date") == today_str]
+        if today_done:
+            lines.append("## 今天完成的")
+            for item in today_done:
+                lines.append(item["raw"])
+            lines.append("")
+
+    return "\n".join(lines)
+
+
 def check_precise_reminders(state, ctx=None, todo_file=None):
     """
     精准提醒检查（每分钟调用）— 只检查当前分钟精确匹配的提醒。
@@ -946,6 +986,8 @@ def check_precise_reminders(state, ctx=None, todo_file=None):
         if recur and len(remind_at) <= 5:
             if t.get("last_notified") == today_str:
                 continue  # 今天已推送（可能被 check_todos 先推了）
+            if t.get("last_completed") == today_str:
+                continue  # 今天已打卡完成，不再提醒
             if not _should_trigger_today(t, now):
                 continue
             if remind_at == now_hm:
