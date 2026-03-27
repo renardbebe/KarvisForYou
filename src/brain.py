@@ -175,6 +175,11 @@ def _set_current_user(user_id):
     _thread_local.user_id = user_id
 
 
+def _clear_current_user():
+    """清除当前线程的 user_id（防止线程池复用时残留）"""
+    _thread_local.user_id = "unknown"
+
+
 def _log_llm_usage(model_tier, model_name, usage_dict, latency_s):
     """记录一次 LLM 调用的用量到 usage_log.jsonl，支持自动轮转"""
     try:
@@ -269,13 +274,6 @@ def _select_model_tier(payload, is_system_action=False, action=None):
     return "main"
 
 
-def _select_skill_model_tier(skill_name):
-    """Skill 执行时的模型选择（Agent Loop 中）"""
-    if skill_name in ("deep_dive", "decision_track"):
-        return "think"
-    return "main"
-
-
 def call_llm(messages, model_tier="main", max_tokens=500,
              temperature=0.3, enable_thinking=None):
     """
@@ -324,8 +322,11 @@ def _call_deepseek(messages, max_tokens=500, temperature=0.3,
         "max_tokens": max_tokens,
         "temperature": temperature
     }
-    # V3.2 支持 thinking 模式控制
-    if "v3.2" in DEEPSEEK_MODEL:
+    # thinking 模式控制：通过 DEEPSEEK_ENABLE_THINKING 环境变量显式开启
+    # 支持 v3.2 / v3-0324 等任何支持 thinking 的模型
+    _supports_thinking = os.environ.get("DEEPSEEK_ENABLE_THINKING", "").lower() in ("1", "true", "yes") \
+                         or "v3.2" in DEEPSEEK_MODEL
+    if _supports_thinking:
         data["enable_thinking"] = enable_thinking
 
     total_chars = sum(len(m.get("content", "")) for m in messages)
@@ -654,7 +655,10 @@ def _build_state_summary(state):
         if top3_date == today_str:
             parts.append(f"今日 Top 3: {items_str}")
         else:
-            parts.append(f"昨日({top3_date}) Top 3: {items_str}")
+            yesterday_str = (datetime.now(beijing_tz) - timedelta(hours=24)).strftime("%Y-%m-%d")
+            if top3_date == yesterday_str:
+                parts.append(f"昨日 Top 3: {items_str}")
+            # 更久以前的 Top 3 不显示，避免 LLM 误将其当作"昨日"事件
 
     # V3-F11: 活跃实验
     exp = state.get("active_experiment")
@@ -704,6 +708,15 @@ def process(payload, send_fn=None, ctx=None):
     # 设置当前线程的 user_id，供 LLM 用量日志使用
     user_id = payload.get("user_id", "unknown")
     _set_current_user(user_id)
+
+    try:
+        return _process_inner(payload, send_fn, ctx, t_start, user_id)
+    finally:
+        _clear_current_user()
+
+
+def _process_inner(payload, send_fn, ctx, t_start, user_id):
+    """process() 的实际逻辑，被 try/finally 包裹以确保线程清理"""
 
     # 0. 预热存储连接（OneDrive 模式需要预热 token + TLS 连接）
     if ctx and hasattr(ctx.IO, 'get_token'):
@@ -1110,7 +1123,8 @@ def _run_agent_loop(system_prompt, user_message, first_decision, first_context, 
 
 # ── V4: 不需要 Flash 加工的简单 skill ──
 _SIMPLE_SKILLS = frozenset({
-    "note.save", "classify.archive", "todo.add", "todo.done",
+    "note.save", "classify.archive",
+    "todo.add", "todo.done", "todo.edit", "todo.delete", "todo.list", "todo.remind_cancel",
     "book.create", "book.excerpt", "book.thought", "book.summary", "book.quotes", "book.list", "book.status",
     "media.create", "media.thought",
     "mood.generate", "voice.journal",

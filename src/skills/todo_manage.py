@@ -101,7 +101,14 @@ def _parse_todo_md(text):
             recur_raw = rc.group(1).strip()
             content = content.replace(rc.group(0), "")
 
-        # 完成标记 ✅
+        # 完成日期 ✅ `YYYY-MM-DD`（已完成项的实际完成时间）
+        completed_date = ""
+        cm = re.search(r'✅\s*`(\d{4}-\d{2}-\d{2})`', content)
+        if cm:
+            completed_date = cm.group(1)
+
+        # 完成标记 ✅（含可能跟随的日期标签一起清除）
+        content = re.sub(r'✅\s*`\d{4}-\d{2}-\d{2}`', '', content)
         content = re.sub(r'✅\s*', '', content)
 
         # 去掉 checkbox 标记
@@ -109,6 +116,7 @@ def _parse_todo_md(text):
 
         item = {
             "raw": stripped, "content": content, "date": date_tag,
+            "completed_date": completed_date,
             "checked": checked, "due_date": due_date,
             "remind_at": remind_at, "recur_raw": recur_raw,
         }
@@ -921,10 +929,13 @@ def build_todo_context_for_llm(ctx, action="morning_report"):
     为 morning_report / evening_checkin 构建过滤后的待办上下文。
 
     - morning_report：只返回「进行中」区域（不含已完成历史）
-    - evening_checkin：返回「进行中」区域 + 仅今天完成的待办
+    - evening_checkin：返回「今天的进行中」+ 仅今天完成的待办
+      （明天及未来的待办单独列出，避免 LLM 混淆为今天的）
 
-    解决的问题：之前直接把 Todo.md 全文（含所有历史已完成记录）传给 LLM，
-    导致 LLM 在 evening_checkin 中误将历史完成的待办当成"今天完成的"来汇报。
+    解决的问题：
+    1. 之前直接把 Todo.md 全文（含所有历史已完成记录）传给 LLM，
+       导致 LLM 在 evening_checkin 中误将历史完成的待办当成"今天完成的"来汇报。
+    2. 之前不过滤 due_date，导致 LLM 把明天/未来的待办也当成"今天未完成的"来汇报。
     """
     text = ctx.IO.read_text(ctx.todo_file)
     if not text:
@@ -935,16 +946,46 @@ def build_todo_context_for_llm(ctx, action="morning_report"):
 
     lines = []
 
-    # ── 进行中区域（始终包含）──
+    # ── 进行中区域 ──
     if doing:
-        lines.append("## 进行中")
-        for item in doing:
-            lines.append(item["raw"])
-        lines.append("")
+        if action == "evening_checkin":
+            # evening_checkin：按 due_date 区分今天的和未来的
+            today_items = []
+            future_items = []
+            for item in doing:
+                dd = item.get("due_date", "")
+                if not dd or dd <= today_str:
+                    # 无截止日、今天到期、或已过期 → 算作今天的
+                    today_items.append(item)
+                else:
+                    # due_date > today → 未来的待办
+                    future_items.append(item)
+
+            if today_items:
+                lines.append("## 今天进行中的待办")
+                for item in today_items:
+                    lines.append(item["raw"])
+                lines.append("")
+
+            if future_items:
+                lines.append("## 明天及以后的待办（不要当成今天的！）")
+                for item in future_items:
+                    lines.append(item["raw"])
+                lines.append("")
+        else:
+            # morning_report 等：显示所有进行中
+            lines.append("## 进行中")
+            for item in doing:
+                lines.append(item["raw"])
+            lines.append("")
 
     # ── 已完成区域（仅 evening_checkin 且只含今天完成的）──
     if action == "evening_checkin" and done:
-        today_done = [item for item in done if item.get("date") == today_str]
+        # 优先使用 completed_date（✅后的日期），回退到 date（创建日期）
+        today_done = [
+            item for item in done
+            if (item.get("completed_date") or item.get("date")) == today_str
+        ]
         if today_done:
             lines.append("## 今天完成的")
             for item in today_done:

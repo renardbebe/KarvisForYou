@@ -858,6 +858,16 @@ def process_endpoint():
 def system_endpoint():
     """系统端点：定时器/手动触发的 system action（支持多用户遍历）"""
     try:
+        # 鉴权：仅允许 localhost 或携带正确 SYSTEM_SECRET 的请求
+        system_secret = os.environ.get("SYSTEM_SECRET", "")
+        remote = request.remote_addr or ""
+        is_local = remote in ("127.0.0.1", "::1", "localhost")
+        if not is_local:
+            req_secret = request.headers.get("X-System-Secret", "")
+            if not system_secret or req_secret != system_secret:
+                _log(f"[/system] 鉴权失败: remote={remote}")
+                return json.dumps({"ok": False, "error": "unauthorized"}), 403
+
         rid = _set_request_id()
         data = request.get_json(force=True)
         action = data.get("action", "")
@@ -974,7 +984,18 @@ def _run_system_action_for_user(action, data, uid, ctx):
                 context["todo"] = todo_content[:2000]
             quick_notes = ctx.IO.read_text(ctx.quick_notes_file)
             if quick_notes:
-                context["quick_notes"] = quick_notes[:1000]
+                # 按日期过滤 quick_notes，避免古老条目被 LLM 误认为"昨天"
+                if action == "morning_report":
+                    yesterday_str = (datetime.now(BEIJING_TZ) - timedelta(days=1)).strftime("%Y-%m-%d")
+                    filtered = _extract_date_entries_for_capsule(quick_notes, yesterday_str)
+                    context["quick_notes"] = filtered if filtered else ""
+                elif action == "evening_checkin":
+                    today_str = datetime.now(BEIJING_TZ).strftime("%Y-%m-%d")
+                    filtered = _extract_date_entries_for_capsule(quick_notes, today_str)
+                    context["quick_notes"] = filtered if filtered else ""
+                else:
+                    # daily_report 等：取最近的条目（末尾）
+                    context["quick_notes"] = quick_notes[-1000:]
         except Exception as e:
             _log(f"[/system] [{uid}] 读取上下文失败（不影响主流程）: {e}")
 
@@ -1629,15 +1650,27 @@ def _generate_companion_message(signals, context, state):
 
 
 def _check_pending_todos(ctx):
-    """F2: 从 Todo.md 读取未完成待办"""
+    """F2: 从 Todo.md 读取未完成待办（仅返回今天应做的，不含未来的）"""
     try:
         todo_content = ctx.IO.read_text(ctx.todo_file)
         if not todo_content:
             return []
+
+        from datetime import datetime
+        today_str = datetime.now().strftime("%Y-%m-%d")
+
         pending = []
         for line in todo_content.split('\n'):
             line = line.strip()
             if line.startswith('- [ ]'):
+                # 检查是否有 📅 截止日期标签
+                import re
+                dd_match = re.search(r'📅\s*(\d{4}-\d{2}-\d{2})', line)
+                if dd_match:
+                    due_date = dd_match.group(1)
+                    if due_date > today_str:
+                        # 未来的待办，跳过
+                        continue
                 pending.append(line[5:].strip())
         return pending
     except Exception as e:
