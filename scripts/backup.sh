@@ -1,5 +1,5 @@
 #!/bin/bash
-# KarvisForAll 数据定期备份脚本
+# KarvisForYou 数据定期备份脚本
 # 用法: crontab -e → 0 4 * * * /opt/karvis-all/scripts/backup.sh
 #
 # 功能:
@@ -10,7 +10,7 @@
 set -euo pipefail
 
 # ---- 配置 ----
-PROJECT_DIR="${KARVIS_PROJECT_DIR:-/root/KarvisForAll}"
+PROJECT_DIR="${KARVIS_PROJECT_DIR:-/root/KarvisForYou}"
 DATA_DIR="${PROJECT_DIR}/data"
 BACKUP_DIR="${PROJECT_DIR}/backups"
 KEEP_DAYS=7

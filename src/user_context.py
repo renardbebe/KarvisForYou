@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-KarvisForAll V12 用户上下文管理
+KarvisForYou V13 用户上下文管理
 每个用户请求携带 UserContext，封装该用户的所有路径、IO 后端和配置。
 
 V12 改造要点：
@@ -8,6 +8,9 @@ V12 改造要点：
   2. OneDrive 用户使用远程路径体系，Local 用户使用本地路径体系
   3. 增加 Skill 过滤方法 (is_skill_allowed / get_allowed_skills)
   4. 增加 is_admin 属性
+
+V13 改造：
+  5. IO 后端统一使用实例模式（LocalFileIO 和 OneDriveIO 均返回实例）
 """
 import os
 import sys
@@ -69,9 +72,9 @@ class UserContext:
         self._skills_config = self.config.get("skills", {})
 
     def _init_local_mode(self):
-        """本地存储模式：IO = LocalFileIO，路径为本地文件系统路径"""
+        """本地存储模式：IO = LocalFileIO 实例，路径为本地文件系统路径"""
         from local_io import LocalFileIO
-        self.IO = LocalFileIO
+        self.IO = LocalFileIO()
         self.storage_mode = "local"
 
         # 00-Inbox

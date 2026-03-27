@@ -17,7 +17,8 @@ import json
 import random
 from datetime import datetime, timezone, timedelta
 from config import REFLECT_COOLDOWN_DAYS
-from local_io import LocalFileIO as _LocalIO
+from local_io import LocalFileIO as _LocalIOClass
+_LocalIO = _LocalIOClass()          # 实例化，与 ctx.IO 保持一致的调用方式
 
 
 BEIJING_TZ = timezone(timedelta(hours=8))

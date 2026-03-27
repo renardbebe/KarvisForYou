@@ -1217,9 +1217,9 @@ def health_detail():
 
     # 6. 日志文件大小
     try:
-        from config import LOG_FILE_KARVISFORALL
-        if os.path.exists(LOG_FILE_KARVISFORALL):
-            log_size_mb = os.path.getsize(LOG_FILE_KARVISFORALL) / (1024 * 1024)
+        from config import LOG_FILE_KARVISFORYOU
+        if os.path.exists(LOG_FILE_KARVISFORYOU):
+            log_size_mb = os.path.getsize(LOG_FILE_KARVISFORYOU) / (1024 * 1024)
             checks["log_size_mb"] = round(log_size_mb, 1)
             if log_size_mb > 100:
                 checks["log_warning"] = "日志文件超过 100MB"

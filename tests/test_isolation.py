@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-KarvisForAll 数据隔离测试
+KarvisForYou 数据隔离测试
 模拟多用户场景，验证：
 1. 用户目录结构独立
 2. 用户注册表正确记录
@@ -11,9 +11,9 @@ KarvisForAll 数据隔离测试
 7. 并发安全
 
 运行方式:
-    cd KarvisForAll/src && python -m pytest ../tests/test_isolation.py -v
+    cd KarvisForYou/src && python -m pytest ../tests/test_isolation.py -v
     或:
-    cd KarvisForAll && python tests/test_isolation.py
+    cd KarvisForYou && python tests/test_isolation.py
 """
 import os
 import sys
@@ -430,7 +430,7 @@ def test_flask_api_e2e():
 def main():
     global _pass_count, _fail_count
 
-    print(f"\nKarvisForAll 数据隔离测试")
+    print(f"\nKarvisForYou 数据隔离测试")
     print(f"测试数据目录: {_test_data_dir}")
     print(f"DATA_DIR: {DATA_DIR}")
 

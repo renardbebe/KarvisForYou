@@ -148,9 +148,9 @@ else
     read -p "  你的企微用户 ID (定时推送目标，可回车跳过): " USER_ID
     USER_ID=${USER_ID:-"YourWeWorkUserID"}
 
-    # 管理员令牌（KarvisForAll 多用户版新增）
+    # 管理员令牌（KarvisForYou 多用户版新增）
     echo ""
-    echo -e "${BOLD}── 管理员配置 (KarvisForAll) ──${NC}"
+    echo -e "${BOLD}── 管理员配置 (KarvisForYou) ──${NC}"
     echo -e "  ${CYAN}管理员令牌用于访问 Web 管理页面，查看用户列表和 LLM 用量。${NC}"
     ADMIN_TOKEN=$(python3 -c "import uuid; print(uuid.uuid4().hex[:24])" 2>/dev/null || echo "change-me-$(date +%s)")
     echo -e "  ${GREEN}✓ 已自动生成管理员令牌: ${BOLD}${ADMIN_TOKEN}${NC}"
@@ -208,7 +208,7 @@ OBSIDIAN_BASE=/应用/remotely-save/EmptyVault
 DEFAULT_USER_ID=${USER_ID}
 PROCESS_ENDPOINT_URL=http://127.0.0.1:9000/process
 
-# --- 多用户管理 (KarvisForAll) ---
+# --- 多用户管理 (KarvisForYou) ---
 ADMIN_TOKEN=${ADMIN_TOKEN}
 DAILY_MESSAGE_LIMIT=${DAILY_MSG_LIMIT}
 WEB_TOKEN_EXPIRE_HOURS=24

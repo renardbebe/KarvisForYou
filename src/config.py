@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-KarvisForAll 统一配置
+KarvisForYou 统一配置
 凭证和运行参数集中管理。
 路径相关已迁移到 user_context.py（按用户隔离）。
 """
@@ -36,7 +36,6 @@ WEATHER_CITY = os.environ.get("WEATHER_CITY", "北京")
 
 # ============ 运行参数 ============
 MSG_CACHE_EXPIRE_SECONDS = 60
-CHECKIN_TIMEOUT_SECONDS = 43200      # 12 小时
 RECENT_MESSAGES_LIMIT = 10           # 短期记忆保留条数
 PROMPT_CACHE_TTL = 1800              # prompt 文件缓存 30 分钟
 STATE_CACHE_TTL = 300                # state 本地缓存 5 分钟
@@ -67,7 +66,7 @@ SCHEDULER_PUSH_MAX_DAILY = 6      # 每日所有主动推送总上限
 SCHEDULER_MIN_PUSH_GAP = 30       # 两次推送最小间隔（分钟）
 
 # ============ 日志查看 ============
-LOG_FILE_KARVISFORALL = os.environ.get("LOG_FILE_KARVISFORALL", "/root/KarvisForAll/logs/app.log")
+LOG_FILE_KARVISFORYOU = os.environ.get("LOG_FILE_KARVISFORYOU", "/root/KarvisForYou/logs/app.log")
 
 # ============ 服务端口 ============
 SERVER_PORT = int(os.environ.get("SERVER_PORT", "9000"))

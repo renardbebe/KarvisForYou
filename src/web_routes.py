@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-KarvisForAll Web 路由 — API 接口 + 页面路由
+KarvisForYou Web 路由 — API 接口 + 页面路由
 所有 /web/* 和 /api/* 路由在此注册。
 """
 import os
@@ -20,7 +20,7 @@ from user_context import (
     create_announcement, get_announcements, delete_announcement,
     create_feedback, get_feedbacks, reply_feedback,
 )
-from config import ADMIN_TOKEN, LOG_FILE_KARVISFORALL
+from config import ADMIN_TOKEN, LOG_FILE_KARVISFORYOU
 
 _BEIJING_TZ = timezone(timedelta(hours=8))
 
@@ -1040,9 +1040,9 @@ def _aggregate_error_logs():
     from collections import deque
     error_groups = []
     try:
-        if not os.path.exists(LOG_FILE_KARVISFORALL):
+        if not os.path.exists(LOG_FILE_KARVISFORYOU):
             return []
-        with open(LOG_FILE_KARVISFORALL, "r", encoding="utf-8", errors="replace") as f:
+        with open(LOG_FILE_KARVISFORYOU, "r", encoding="utf-8", errors="replace") as f:
             lines = list(deque(f, maxlen=5000))  # 最近 5000 行
 
         seen = {}  # {error_key: {count, last_ts, sample}}
@@ -1344,12 +1344,12 @@ def api_admin_logs():
 
     # 读取 V12 服务日志
     try:
-        if os.path.exists(LOG_FILE_KARVISFORALL):
-            with open(LOG_FILE_KARVISFORALL, "r", encoding="utf-8", errors="replace") as f:
+        if os.path.exists(LOG_FILE_KARVISFORYOU):
+            with open(LOG_FILE_KARVISFORYOU, "r", encoding="utf-8", errors="replace") as f:
                 log_lines = list(deque(f, maxlen=lines))
             log_lines = [l.rstrip("\n") for l in log_lines]
         else:
-            log_lines = [f"[WARN] 日志文件不存在: {LOG_FILE_KARVISFORALL}"]
+            log_lines = [f"[WARN] 日志文件不存在: {LOG_FILE_KARVISFORYOU}"]
     except Exception as e:
         log_lines = [f"[ERROR] 读取日志失败: {e}"]
 
@@ -1366,7 +1366,7 @@ def api_admin_logs():
     if level and level != "ALL":
         log_lines = [l for l in log_lines if level in l.upper()]
 
-    return jsonify({"lines": log_lines, "total": len(log_lines), "project": "karvisforall"})
+    return jsonify({"lines": log_lines, "total": len(log_lines), "project": "karvisforyou"})
 
 
 # ============================================================

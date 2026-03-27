@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-KarvisForAll 对话式设置
+KarvisForYou 对话式设置
 通过自然语言设置昵称、AI 风格、个人信息。
 """
 import sys

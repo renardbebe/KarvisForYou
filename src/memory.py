@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-KarvisForAll 记忆管理（多用户版）
+KarvisForYou 记忆管理（多用户版）
 缓存按 user_id 分区，所有函数接收 UserContext。
 """
 import time

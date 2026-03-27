@@ -42,14 +42,6 @@
 
 ---
 
-## 打卡流程
-
-- 用户说"打卡" → `checkin.start`
-- 打卡进行中（state.checkin_active=true）→ `checkin.answer` / `checkin.skip` / `checkin.cancel`
-- 打卡问题：Q1 今天做了什么 → Q2 心情评分(1-10) → Q3 纠结的事 → Q4 脑海里的念头
-
----
-
 ## 语音消息
 
 - 收到语音 → ASR 转写

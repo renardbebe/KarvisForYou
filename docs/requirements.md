@@ -1,4 +1,4 @@
-# KarvisForAll 需求文档
+# KarvisForYou 需求文档
 
 > 版本：v1.0
 > 日期：2026-02-15
@@ -12,7 +12,7 @@
 
 Karvis 是一个运行在企业微信上的 AI 生活助手，通过自然对话帮助用户记录生活、管理待办、复盘情绪、跟踪习惯。当前 Karvis（开源版）是纯单用户架构——一套部署只能服务一个人。
 
-KarvisForAll 是 Karvis 的多用户版本，目标是让 2-3 个朋友（后续可扩展到更多人）加入同一个企微团队后，每人拥有独立的 AI 助手体验，数据完全隔离。
+KarvisForYou 是 Karvis 的多用户版本，目标是让 2-3 个朋友（后续可扩展到更多人）加入同一个企微团队后，每人拥有独立的 AI 助手体验，数据完全隔离。
 
 ### 1.2 项目定位
 
@@ -27,7 +27,7 @@ KarvisForAll 是 Karvis 的多用户版本，目标是让 2-3 个朋友（后续
 
 ### 1.3 与 Karvis-opensource 的关系
 
-KarvisForAll 是一个**独立项目**，从 Karvis-opensource fork 后进行多用户改造。不追求与原版保持同步，而是在原版功能集的基础上做减法和适配。
+KarvisForYou 是一个**独立项目**，从 Karvis-opensource fork 后进行多用户改造。不追求与原版保持同步，而是在原版功能集的基础上做减法和适配。
 
 ### 1.4 核心原则
 
@@ -533,7 +533,7 @@ class UserContext:
 
 ### 6.3 存储方案
 
-KarvisForAll **只使用 Lite 本地模式**，不支持 OneDrive。
+KarvisForYou **只使用 Lite 本地模式**，不支持 OneDrive。
 
 原因：
 - 多用户数据存一个人的 OneDrive 有隐私问题
@@ -549,7 +549,7 @@ KarvisForAll **只使用 Lite 本地模式**，不支持 OneDrive。
 
 原版缓存是全局单例，多用户需按 user_id 分区：
 
-| 缓存项 | 原版 | KarvisForAll |
+| 缓存项 | 原版 | KarvisForYou |
 |---|---|---|
 | State 缓存 | `_state_cache = {"data": ..., "expire_time": ...}` | `_state_cache = {user_id: {"data": ..., "expire_time": ...}}` |
 | Prompt 缓存 | `PromptCache` 全局单例 | 保持全局（Prompt 模板所有用户共享） |
@@ -792,7 +792,7 @@ Web 服务与消息处理服务共享同一个 Flask 进程，通过路由前缀
 
 ## 附录 A：从 Karvis-opensource 继承的功能映射
 
-| Karvis-opensource Skill | KarvisForAll 对应 | 改造内容 |
+| Karvis-opensource Skill | KarvisForYou 对应 | 改造内容 |
 |---|---|---|
 | `note.save` | 继承 | 路径 → ctx |
 | `classify.archive` | 继承 | 路径 → ctx |

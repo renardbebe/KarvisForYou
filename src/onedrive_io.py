@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-KarvisForAll V12 — OneDrive 统一读写层（实例模式）
+KarvisForYou — OneDrive 统一读写层（实例模式）
 从 Karvis 单用户版移植，改造要点：
   1. 所有 @classmethod → 实例方法，凭证由构造函数注入
   2. token 缓存为实例级别（支持多个 OneDrive 账号并发）

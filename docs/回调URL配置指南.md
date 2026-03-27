@@ -30,14 +30,14 @@
 ### 第一步：启动 Karvis
 
 ```bash
-cd KarvisForAll
+cd KarvisForYou
 ./setup.sh
 ```
 
 或者手动启动：
 
 ```bash
-cd KarvisForAll/src
+cd KarvisForYou/src
 python3 app.py
 ```
 
@@ -134,7 +134,7 @@ ss -tlnp | grep 9000
 ### 第三步：启动 Karvis
 
 ```bash
-cd KarvisForAll/src
+cd KarvisForYou/src
 python3 app.py
 ```
 

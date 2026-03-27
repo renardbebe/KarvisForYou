@@ -84,13 +84,12 @@ brain.process()
 
 ## 完整 Skill 列表
 
-共 **48 个 Skill 命令**，分布在 22 个功能模块中（[详细说明 →](SKILLS.md)）：
+共 **44 个 Skill 命令**，分布在 21 个功能模块中（[详细说明 →](SKILLS.md)）：
 
 | 分类 | Skill | 说明 |
 |---|---|---|
 | **笔记** | `note.save` | 保存到 Quick-Notes |
 | | `classify.archive` | 智能归档（工作/情感/趣事/碎碎念） |
-| **打卡** | `checkin.start/answer/skip/cancel` | 每日 4 问打卡流程 |
 | **待办** | `todo.add/done/list/remind_cancel` | 待办管理（支持循环/截止日期/序号批量操作） |
 | **读书** | `book.create/excerpt/thought/summary/quotes` | 读书笔记全流程（含 AI 总结/金句提炼） |
 | **影视** | `media.create/thought` | 影视笔记 |
