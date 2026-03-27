@@ -409,5 +409,10 @@ def _write_weekly_review(ctx, file_path, content):
 
 # Skill 热加载注册表
 SKILL_REGISTRY = {
-    "weekly.review": execute,
+    "weekly.review": {
+        "handler": execute,
+        "prompt": '**weekly.review** `{date?}` — 生成周回顾',
+        "simple": False,
+        "skip_note": False,
+    },
 }

@@ -157,6 +157,16 @@ def _update_media_list(name, director, media_type, year, ctx):
 
 # Skill 热加载注册表（O-010）
 SKILL_REGISTRY = {
-    "media.create": create,
-    "media.thought": thought,
+    "media.create": {
+        "handler": create,
+        "prompt": '**media.create** `{name, director, media_type, year, description, thought?}` — 创建影视笔记（media_type: 电影|剧集|纪录片|动画）',
+        "simple": True,
+        "skip_note": True,
+    },
+    "media.thought": {
+        "handler": thought,
+        "prompt": '**media.thought** `{content, media?}` — 添加影视感想',
+        "simple": True,
+        "skip_note": True,
+    },
 }

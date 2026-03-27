@@ -120,5 +120,8 @@ SKILL_REGISTRY = {
         "handler": handle_query,
         "visibility": "private",
         "description": "收支查询",
+        "prompt": '**finance.query** `{query_type, time_range?, category?}` — 查询收支（query_type: balance|expense|income|summary）',
+        "simple": False,
+        "skip_note": False,
     },
 }

@@ -3,7 +3,8 @@
 Prompt Registry — 全项目 prompt 统一管理
 所有系统级 prompt 在此维护，各模块通过 key 引用。
 
-知识库类（memory.md）仍从 OneDrive 动态加载。
+V13: SKILL_PROMPT_LINES 从 SKILL_REGISTRY 元数据自动生成，
+新增 skill 只需在 skills/*.py 的 SKILL_REGISTRY 中声明 prompt 字段。
 """
 
 # ============================================================
@@ -34,83 +35,24 @@ SOUL = """# Karvis 灵魂
 - 早上 8-9 点：适合推送早报
 - 晚上 21-23 点：适合推送晚间回顾"""
 
-# ---- V12: SKILLS 拆分为结构化数据，支持动态过滤 ----
-# 每个条目的 key 与 SKILL_REGISTRY 中的 skill name 对应
-# value 是该 skill 在 Prompt 中的描述行（不含 "- " 前缀）
+# ---- V13: SKILL_PROMPT_LINES 从 SKILL_REGISTRY 元数据自动生成 ----
+# 消除了原先需要在 SKILL_REGISTRY 和 SKILL_PROMPT_LINES 两处维护的冗余。
+# 新增 skill 只需在对应 skills/*.py 的 SKILL_REGISTRY 中声明 prompt 字段即可。
 
-SKILL_PROMPT_LINES = {
-    # ── 基础记录 ──
-    "note.save": '**note.save** `{content, attachment?}` — 保存到 Quick-Notes',
-    "classify.archive": '**classify.archive** `{category, title, content, attachment?, merge?}` — 归档（category: work|emotion|fun|misc, title≤10字, merge=true 合并到最近同类）',
-    # ── 待办 ──
-    "todo.add": '**todo.add** `{content, due_date?, remind_at?, recur?, recur_spec?}` — 添加待办。due_date=YYYY-MM-DD; remind_at=YYYY-MM-DD HH:MM(一次性)或HH:MM(循环); recur=daily/weekday/weekly/monthly; recur_spec={cycle_on,cycle_off,start_date}或{weekdays:[1,3,5]}',
-    "todo.done": '**todo.done** `{keyword?, indices?, all?}` — 完成待办。keyword=模糊匹配（如"猫粮"匹配"买猫粮"）; indices=序号完成，支持"3"/"2-7"/"1,3,5"; all=true全部完成（一次性待办标记完成，循环待办打卡）。有indices时优先用indices。序号对应todo.list返回的编号',
-    "todo.edit": '**todo.edit** `{keyword?, index?, new_content?, new_due_date?, new_remind_at?, new_recur?, new_recur_spec?}` — 修改待办。keyword或index(1-based序号)定位要改的条目；new_*字段指定要修改的属性，传""表示清除该属性',
-    "todo.delete": '**todo.delete** `{keyword?, indices?}` — 删除（废弃）待办，不记入已完成。用于用户说"不做了/删掉/取消这个待办"的场景。keyword=模糊匹配；indices=序号批量删除。注意区分：用户说"做完了"→todo.done，"不做了/删掉"→todo.delete',
-    "todo.remind_cancel": '**todo.remind_cancel** `{id?, content?}` — 取消循环提醒',
-    "todo.list": '**todo.list** `{}` — 查看待办',
-    # ── 天气查询 ──
-    "weather.query": '**weather.query** `{city?}` — 查询实时天气。city 可选，默认用用户所在城市',
-    # ── 联网搜索 ──
-    "web.search": '**web.search** `{query, context?}` — 联网搜索获取实时信息。query=搜索内容（由你根据用户意图生成），context=用户原始消息。搜索结果会返回给你，你再结合结果生成最终回复',
-    # ── 日报/周报 ──
-    "daily.generate": '**daily.generate** `{date?}` — 生成日报',
-    "weekly.review": '**weekly.review** `{date?}` — 生成周回顾',
-    "mood.generate": '**mood.generate** `{date?}` — 生成情绪日记',
-    # ── 读书笔记 ──
-    "book.create": '**book.create** `{name, author, category, description, thought?, status?}` — 创建/切换读书笔记（status: want_read=想读 | reading=在读 | finished=读完 | paused=搁置，默认 want_read。根据用户语义判断：「想看/想读/加入书单」→want_read，「开始读/在读」→reading）',
-    "book.excerpt": '**book.excerpt** `{content, book?}` — 添加书摘',
-    "book.thought": '**book.thought** `{content, book?}` — 添加读书感想',
-    "book.summary": '**book.summary** `{book?}` — 生成读书总结',
-    "book.quotes": '**book.quotes** `{book?}` — 提炼金句',
-    "book.list": '**book.list** `{status?}` — 查看书单（status 可选过滤：want_read/reading/finished/paused）',
-    "book.status": '**book.status** `{book, status}` — 修改阅读状态（status: want_read=想读 | reading=在读 | finished=读完 | paused=搁置）',
-    # ── 影视笔记 ──
-    "media.create": '**media.create** `{name, director, media_type, year, description, thought?}` — 创建影视笔记（media_type: 电影|剧集|纪录片|动画）',
-    "media.thought": '**media.thought** `{content, media?}` — 添加影视感想',
-    # ── 习惯实验 ──
-    "habit.propose": '**habit.propose** `{name, hypothesis, triggers, micro_action, duration_days?, start_date?}` — 提议微习惯实验（start_date=YYYY-MM-DD）',
-    "habit.nudge": '**habit.nudge** `{trigger_text?, accepted?}` — 实验触发/用户回复接受拒绝',
-    "habit.status": '**habit.status** `{}` — 查看实验进度',
-    "habit.complete": '**habit.complete** `{result_summary?, success?}` — 结束实验',
-    # ── 决策追踪 ──
-    "decision.record": '**decision.record** `{topic, decision, emotion?, review_days?}` — 记录决策（默认3天后复盘）',
-    "decision.review": '**decision.review** `{decision_id?, result, feeling?}` — 决策复盘',
-    "decision.list": '**decision.list** `{}` — 查看待复盘决策',
-    # ── 想法讨论 ──
-    "discuss.start": '**discuss.start** `{topic, stance?}` — 开始讨论/辩论（进入多轮讨论模式）',
-    "discuss.reply": '**discuss.reply** `{message}` — 讨论中的回复（discuss_pending=true 时使用）',
-    "discuss.conclude": '**discuss.conclude** `{extra_note?}` — 结束讨论并生成结论归档',
-    "discuss.cancel": '**discuss.cancel** `{}` — 取消讨论',
-    # ── 语音/深潜 ──
-    "voice.journal": '**voice.journal** `{asr_text, attachment?, duration_hint?}` — 长语音(>200字)整理为结构化日记',
-    "deep.dive": '**deep.dive** `{topic, keywords?, save?}` — 主题深潜：跨时间线深度分析',
-    # ── Agent Loop 内部 ──
-    "internal.read": '**internal.read** `{paths, max_chars?}` — [Agent] 读文件（paths数组，最多5个）',
-    "internal.search": '**internal.search** `{keywords, scope?, max_results?}` — [Agent] 搜索笔记（scope: quick_notes|archives|all）',
-    "internal.list": '**internal.list** `{directory}` — [Agent] 列目录',
-    # ── 设置 ──
-    "settings.nickname": '**settings.nickname** `{nickname}` — 设用户昵称',
-    "settings.ai_name": '**settings.ai_name** `{ai_name}` — 设AI昵称',
-    "settings.soul": '**settings.soul** `{style, mode?}` — 调AI风格（mode: set|append|reset）',
-    "settings.info": '**settings.info** `{info, category?}` — 记录用户信息（category: occupation/city/pets/people/other）',
-    "settings.skills": '**settings.skills** `{action, skill_names?}` — 管理功能（action: list|enable|disable）',
-    "settings.frequency": '**settings.frequency** `{companion_max?, push_max?, action?}` — 调整主动推送频率。companion_max=每日主动关怀次数(0-5)，push_max=每日推送总上限(1-10)，action=query查看当前/set设置',
-    "web.token": '**web.token** `{}` — 生成 Web 查看链接',
-    # ── 通用操作 ──
-    "dynamic": '**dynamic** `{actions: [{op, path, value?}...]}` — 通用状态操作。op: state.set/state.delete/state.push/file.write/file.append。可操作: active_experiment.*/daily_top3/active_book/active_media/pending_decisions/custom.*。优先用专用skill，dynamic是兜底',
-    # ── 深度自问 ──
-    "reflect.push": '**reflect.push** `{}` — 推送深度自问',
-    "reflect.answer": '**reflect.answer** `{answer}` — 回答深度自问',
-    "reflect.skip": '**reflect.skip** `{}` — 跳过深度自问',
-    "reflect.history": '**reflect.history** `{days?}` — 查看自问记录（默认7天）',
-    "ignore": '**ignore** `{reason?}` — 直接对话回复（闲聊、提问、咨询、日常交流等不需要执行任何操作的场景）',
-    # ---- V12: finance 模块（private，仅管理员可见）----
-    "finance.query": '**finance.query** `{query_type, time_range?, category?}` — 查询收支（query_type: balance|expense|income|summary）',
-    "finance.snapshot": '**finance.snapshot** `{}` — 财务快照',
-    "finance.import": '**finance.import** `{source?}` — 导入财务数据',
-    "finance.monthly": '**finance.monthly** `{month?}` — 月度财务报告',
-}
+def _load_skill_prompt_lines():
+    """延迟加载 prompt 描述行，避免循环导入。"""
+    from skill_loader import get_prompt_lines
+    return get_prompt_lines()
+
+# 模块级变量，首次访问时填充
+SKILL_PROMPT_LINES = None
+
+def _ensure_prompt_lines():
+    """确保 SKILL_PROMPT_LINES 已填充。"""
+    global SKILL_PROMPT_LINES
+    if SKILL_PROMPT_LINES is None:
+        SKILL_PROMPT_LINES = _load_skill_prompt_lines()
+    return SKILL_PROMPT_LINES
 
 
 def build_skills_prompt(allowed_skill_names: list, injected_rule_tags: list = None) -> str:
@@ -124,6 +66,8 @@ def build_skills_prompt(allowed_skill_names: list, injected_rule_tags: list = No
     Returns:
         格式化的 SKILLS prompt 字符串
     """
+    prompt_lines = _ensure_prompt_lines()
+
     # 条件注入：低频 skill 前缀 → 需要的 RULES 段标签
     # 未列入此映射的 skill 始终显示
     _SKILL_TAG_MAP = {
@@ -138,7 +82,7 @@ def build_skills_prompt(allowed_skill_names: list, injected_rule_tags: list = No
     injected_tags = set(injected_rule_tags) if injected_rule_tags is not None else None
 
     lines = []
-    for name in sorted(SKILL_PROMPT_LINES.keys()):
+    for name in sorted(prompt_lines.keys()):
         if name not in allowed_skill_names:
             continue
         # 条件注入检查
@@ -150,7 +94,7 @@ def build_skills_prompt(allowed_skill_names: list, injected_rule_tags: list = No
                     break
             if required_tag and required_tag not in injected_tags:
                 continue
-        desc = SKILL_PROMPT_LINES[name]
+        desc = prompt_lines[name]
         lines.append(f"- {desc}")
 
     if not lines:
@@ -159,8 +103,16 @@ def build_skills_prompt(allowed_skill_names: list, injected_rule_tags: list = No
     return "# 可用 Skill（参数均为 JSON）\n\n" + "\n".join(lines)
 
 
-# 向后兼容：SKILLS 变量保留，包含全量 Skill 描述（用于非过滤场景）
-SKILLS = build_skills_prompt(list(SKILL_PROMPT_LINES.keys()))
+# 向后兼容：SKILLS 变量保留，延迟填充
+_SKILLS_CACHE = None
+
+def _get_skills():
+    """延迟生成全量 SKILLS 文本。"""
+    global _SKILLS_CACHE
+    if _SKILLS_CACHE is None:
+        prompt_lines = _ensure_prompt_lines()
+        _SKILLS_CACHE = build_skills_prompt(list(prompt_lines.keys()))
+    return _SKILLS_CACHE
 
 # ── RULES 分段（方案 A+C：条件注入，减少 prompt token）──
 # brain.py 中的 build_system_prompt 会根据 payload.type / state / 用户文本

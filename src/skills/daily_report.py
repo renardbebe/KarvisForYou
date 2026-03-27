@@ -238,5 +238,10 @@ def _write_daily_note(ctx, file_path, date_str, daily_content):
 
 # Skill 热加载注册表（O-010）
 SKILL_REGISTRY = {
-    "daily.generate": execute,
+    "daily.generate": {
+        "handler": execute,
+        "prompt": '**daily.generate** `{date?}` — 生成日报',
+        "simple": False,
+        "skip_note": False,
+    },
 }

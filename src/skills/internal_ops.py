@@ -222,7 +222,22 @@ def list_files(params, state, ctx):
 
 # ============ Skill 热加载注册表 ============
 SKILL_REGISTRY = {
-    "internal.read": read_files,
-    "internal.search": search_files,
-    "internal.list": list_files,
+    "internal.read": {
+        "handler": read_files,
+        "prompt": '**internal.read** `{paths, max_chars?}` — [Agent] 读文件（paths数组，最多5个）',
+        "simple": False,
+        "skip_note": False,
+    },
+    "internal.search": {
+        "handler": search_files,
+        "prompt": '**internal.search** `{keywords, scope?, max_results?}` — [Agent] 搜索笔记（scope: quick_notes|archives|all）',
+        "simple": False,
+        "skip_note": False,
+    },
+    "internal.list": {
+        "handler": list_files,
+        "prompt": '**internal.list** `{directory}` — [Agent] 列目录',
+        "simple": False,
+        "skip_note": False,
+    },
 }

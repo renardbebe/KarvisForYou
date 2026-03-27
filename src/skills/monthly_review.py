@@ -479,5 +479,10 @@ def _cat_label(key):
 
 # Skill 热加载注册表
 SKILL_REGISTRY = {
-    "monthly.review": execute,
+    "monthly.review": {
+        "handler": execute,
+        "prompt": '**monthly.review** `{date?}` — 生成月度回顾',
+        "simple": False,
+        "skip_note": False,
+    },
 }

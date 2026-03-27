@@ -399,10 +399,40 @@ def set_frequency(params, state, ctx):
 # ============ Skill 注册 ============
 
 SKILL_REGISTRY = {
-    "settings.nickname": set_nickname,
-    "settings.ai_name": set_ai_name,
-    "settings.soul": set_soul,
-    "settings.info": set_info,
-    "settings.skills": manage_skills,
-    "settings.frequency": set_frequency,
+    "settings.nickname": {
+        "handler": set_nickname,
+        "prompt": '**settings.nickname** `{nickname}` — 设用户昵称',
+        "simple": True,
+        "skip_note": True,
+    },
+    "settings.ai_name": {
+        "handler": set_ai_name,
+        "prompt": '**settings.ai_name** `{ai_name}` — 设AI昵称',
+        "simple": True,
+        "skip_note": True,
+    },
+    "settings.soul": {
+        "handler": set_soul,
+        "prompt": '**settings.soul** `{style, mode?}` — 调AI风格（mode: set|append|reset）',
+        "simple": True,
+        "skip_note": True,
+    },
+    "settings.info": {
+        "handler": set_info,
+        "prompt": '**settings.info** `{info, category?}` — 记录用户信息（category: occupation/city/pets/people/other）',
+        "simple": True,
+        "skip_note": True,
+    },
+    "settings.skills": {
+        "handler": manage_skills,
+        "prompt": '**settings.skills** `{action, skill_names?}` — 管理功能（action: list|enable|disable）',
+        "simple": True,
+        "skip_note": True,
+    },
+    "settings.frequency": {
+        "handler": set_frequency,
+        "prompt": '**settings.frequency** `{companion_max?, push_max?, action?}` — 调整主动推送频率。companion_max=每日主动关怀次数(0-5)，push_max=每日推送总上限(1-10)，action=query查看当前/set设置',
+        "simple": False,
+        "skip_note": True,
+    },
 }

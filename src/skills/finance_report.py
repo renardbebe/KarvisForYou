@@ -616,5 +616,8 @@ SKILL_REGISTRY = {
         "handler": handle_monthly,
         "visibility": "private",
         "description": "财务月报生成",
+        "prompt": '**finance.monthly** `{month?}` — 月度财务报告',
+        "simple": False,
+        "skip_note": False,
     },
 }

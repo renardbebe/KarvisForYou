@@ -221,5 +221,10 @@ def _write_journal_file(date_str, content, ctx):
 
 # ============ Skill 热加载注册表 ============
 SKILL_REGISTRY = {
-    "voice.journal": journal,
+    "voice.journal": {
+        "handler": journal,
+        "prompt": '**voice.journal** `{asr_text, attachment?, duration_hint?}` — 长语音(>200字)整理为结构化日记',
+        "simple": True,
+        "skip_note": False,
+    },
 }

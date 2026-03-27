@@ -384,8 +384,28 @@ def _archive_discussion(topic, history, conclusion, ctx):
 
 # ============ Skill 热加载注册表 ============
 SKILL_REGISTRY = {
-    "discuss.start": start,
-    "discuss.reply": reply,
-    "discuss.conclude": conclude,
-    "discuss.cancel": cancel_discuss,
+    "discuss.start": {
+        "handler": start,
+        "prompt": '**discuss.start** `{topic, stance?}` — 开始讨论/辩论（进入多轮讨论模式）',
+        "simple": True,
+        "skip_note": False,
+    },
+    "discuss.reply": {
+        "handler": reply,
+        "prompt": '**discuss.reply** `{message}` — 讨论中的回复（discuss_pending=true 时使用）',
+        "simple": True,
+        "skip_note": False,
+    },
+    "discuss.conclude": {
+        "handler": conclude,
+        "prompt": '**discuss.conclude** `{extra_note?}` — 结束讨论并生成结论归档',
+        "simple": True,
+        "skip_note": False,
+    },
+    "discuss.cancel": {
+        "handler": cancel_discuss,
+        "prompt": '**discuss.cancel** `{}` — 取消讨论',
+        "simple": True,
+        "skip_note": False,
+    },
 }

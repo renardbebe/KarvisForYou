@@ -202,5 +202,8 @@ SKILL_REGISTRY = {
         "handler": handle_snapshot,
         "visibility": "private",
         "description": "资产快照查询",
+        "prompt": '**finance.snapshot** `{}` — 财务快照',
+        "simple": False,
+        "skip_note": False,
     },
 }

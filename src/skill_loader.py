@@ -3,10 +3,12 @@
 KarvisForYou Skill 热加载器
 handler 签名: (params, state, ctx) -> dict
 
-V12 改造：支持 visibility 字段和元数据注册。
-SKILL_REGISTRY 支持两种格式：
-  旧格式: {"skill.name": handler_fn}  → visibility 默认 "public"
-  新格式: {"skill.name": {"handler": handler_fn, "visibility": "private", "description": "...", ...}}
+V13 统一元数据：每个 SKILL_REGISTRY 条目可声明 prompt / simple / skip_note 字段，
+skill_loader 提取后提供统一 API，消除多处硬编码。
+
+SKILL_REGISTRY 格式：
+  旧格式: {"skill.name": handler_fn}  → 自动填充默认值
+  新格式: {"skill.name": {"handler": handler_fn, "prompt": "...", "simple": True, ...}}
 """
 import os
 import sys
@@ -21,16 +23,16 @@ def _log(msg):
 
 
 _cached_registry = None   # {name: handler}
-_cached_metadata = None    # {name: {visibility, description, preview_message, ...}}
+_cached_metadata = None    # {name: {visibility, description, prompt, simple, skip_note, ...}}
 
 
 def _normalize_entry(skill_name, entry):
     """将 SKILL_REGISTRY 条目标准化为 (handler, metadata) 格式"""
     if callable(entry):
-        # 旧格式: handler_fn
+        # 旧格式: handler_fn（向后兼容，不应再新增）
         return entry, {"visibility": "public"}
     elif isinstance(entry, dict) and "handler" in entry:
-        # 新格式: {"handler": fn, "visibility": "private", ...}
+        # 新格式: {"handler": fn, "visibility": "private", "prompt": "...", ...}
         handler = entry["handler"]
         meta = {k: v for k, v in entry.items() if k != "handler"}
         meta.setdefault("visibility", "public")
@@ -78,7 +80,12 @@ def load_skill_registry():
 
     # 内置 ignore handler
     registry["ignore"] = lambda params, state, ctx: {"success": True}
-    metadata["ignore"] = {"visibility": "public"}
+    metadata["ignore"] = {
+        "visibility": "public",
+        "prompt": '**ignore** `{reason?}` — 直接对话回复（闲聊、提问、咨询、日常交流等不需要执行任何操作的场景）',
+        "simple": False,
+        "skip_note": False,
+    }
 
     _log(f"[SkillLoader] 已加载 {len(loaded_modules)} 个模块, 共 {len(registry)} 个 skill")
     _cached_registry = registry
@@ -87,14 +94,56 @@ def load_skill_registry():
 
 
 def get_skill_metadata():
-    """获取所有 Skill 的元数据（visibility 等）。
+    """获取所有 Skill 的元数据。
 
-    返回: dict[str, dict] — skill_name → {visibility, description, preview_message, ...}
+    返回: dict[str, dict] — skill_name → {visibility, description, prompt, simple, skip_note, ...}
     """
     global _cached_metadata
     if _cached_metadata is None:
         load_skill_registry()
     return _cached_metadata or {}
+
+
+# ============ V13 统一元数据 API ============
+
+def get_prompt_lines():
+    """从 SKILL_REGISTRY 元数据自动生成 prompt 描述字典。
+
+    返回: dict[str, str] — skill_name → prompt 描述行（与原 SKILL_PROMPT_LINES 格式一致）
+    仅包含声明了 'prompt' 字段的 skill。
+    """
+    metadata = get_skill_metadata()
+    return {
+        name: meta["prompt"]
+        for name, meta in metadata.items()
+        if "prompt" in meta
+    }
+
+
+def get_simple_skills():
+    """从 SKILL_REGISTRY 元数据自动生成 simple skill 集合。
+
+    返回: frozenset[str] — 标记为 simple=True 的 skill 名称集合
+    替代原 brain.py 中的硬编码 _SIMPLE_SKILLS。
+    """
+    metadata = get_skill_metadata()
+    return frozenset(
+        name for name, meta in metadata.items()
+        if meta.get("simple", False)
+    )
+
+
+def get_skip_note_skills():
+    """从 SKILL_REGISTRY 元数据自动生成 skip_note skill 集合。
+
+    返回: frozenset[str] — 标记为 skip_note=True 的 skill 名称集合
+    替代原 brain.py 中的硬编码 _SKIP_NOTE_SKILLS。
+    """
+    metadata = get_skill_metadata()
+    return frozenset(
+        name for name, meta in metadata.items()
+        if meta.get("skip_note", False)
+    )
 
 
 def get_visible_skills(ctx) -> dict:

@@ -1318,10 +1318,40 @@ def remind_cancel(params, state, ctx):
 
 # Skill 热加载注册表（O-010）
 SKILL_REGISTRY = {
-    "todo.add": add,
-    "todo.done": complete,
-    "todo.edit": edit,
-    "todo.delete": delete,
-    "todo.list": list_todos,
-    "todo.remind_cancel": remind_cancel,
+    "todo.add": {
+        "handler": add,
+        "prompt": '**todo.add** `{content, due_date?, remind_at?, recur?, recur_spec?}` — 添加待办。due_date=YYYY-MM-DD; remind_at=YYYY-MM-DD HH:MM(一次性)或HH:MM(循环); recur=daily/weekday/weekly/monthly; recur_spec={cycle_on,cycle_off,start_date}或{weekdays:[1,3,5]}',
+        "simple": True,
+        "skip_note": True,
+    },
+    "todo.done": {
+        "handler": complete,
+        "prompt": '**todo.done** `{keyword?, indices?, all?}` — 完成待办。keyword=模糊匹配（如"猫粮"匹配"买猫粮"）; indices=序号完成，支持"3"/"2-7"/"1,3,5"; all=true全部完成（一次性待办标记完成，循环待办打卡）。有indices时优先用indices。序号对应todo.list返回的编号',
+        "simple": True,
+        "skip_note": True,
+    },
+    "todo.edit": {
+        "handler": edit,
+        "prompt": '**todo.edit** `{keyword?, index?, new_content?, new_due_date?, new_remind_at?, new_recur?, new_recur_spec?}` — 修改待办。keyword或index(1-based序号)定位要改的条目；new_*字段指定要修改的属性，传""表示清除该属性',
+        "simple": True,
+        "skip_note": True,
+    },
+    "todo.delete": {
+        "handler": delete,
+        "prompt": '**todo.delete** `{keyword?, indices?}` — 删除（废弃）待办，不记入已完成。用于用户说"不做了/删掉/取消这个待办"的场景。keyword=模糊匹配；indices=序号批量删除。注意区分：用户说"做完了"→todo.done，"不做了/删掉"→todo.delete',
+        "simple": True,
+        "skip_note": True,
+    },
+    "todo.list": {
+        "handler": list_todos,
+        "prompt": '**todo.list** `{}` — 查看待办',
+        "simple": True,
+        "skip_note": True,
+    },
+    "todo.remind_cancel": {
+        "handler": remind_cancel,
+        "prompt": '**todo.remind_cancel** `{id?, content?}` — 取消循环提醒',
+        "simple": True,
+        "skip_note": False,
+    },
 }

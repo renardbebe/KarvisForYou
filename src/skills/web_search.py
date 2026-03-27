@@ -121,5 +121,10 @@ def _call_qwen_search(prompt, max_tokens=800, temperature=0.3):
 
 # ============ Skill 热加载注册表 ============
 SKILL_REGISTRY = {
-    "web.search": search,
+    "web.search": {
+        "handler": search,
+        "prompt": '**web.search** `{query, context?}` — 联网搜索获取实时信息。query=搜索内容（由你根据用户意图生成），context=用户原始消息。搜索结果会返回给你，你再结合结果生成最终回复',
+        "simple": False,
+        "skip_note": True,
+    },
 }

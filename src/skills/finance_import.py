@@ -294,5 +294,8 @@ SKILL_REGISTRY = {
         "handler": handle_import,
         "visibility": "private",
         "description": "iCost 数据导入",
+        "prompt": '**finance.import** `{source?}` — 导入财务数据',
+        "simple": False,
+        "skip_note": False,
     },
 }

@@ -202,17 +202,16 @@ KarvisForYou/
 │   ├── user_context.py      # 多用户管理
 │   ├── web_routes.py        # Web API + 页面路由
 │   ├── memory.py            # 记忆系统（三级缓存）
-│   ├── skill_loader.py      # Skill 自动发现 V12
-│   ├── channel_router.py    # 渠道路由器
-│   ├── storage.py           # 存储抽象层
-│   ├── local_io.py          # 本地文件读写
-│   ├── onedrive_io.py       # OneDrive 存储
-│   ├── wework_crypto.py     # 企微消息加解密
-│   ├── telegram_bot.py      # Telegram 接入
-│   ├── finance_utils.py     # 财务工具
-│   ├── requirements.txt     # Python 依赖
-│   ├── skills/              # 22 个功能模块 → 48 个 Skill
-│   └── web_static/          # 14 个 Web 页面
+│   ├── skill_loader.py      # Skill 自动发现 + 统一元数据 V13
+    │   ├── channel_router.py    # 渠道路由器
+    │   ├── storage.py           # 存储抽象层
+    │   ├── local_io.py          # 本地文件读写
+    │   ├── wework_crypto.py     # 企微消息加解密
+    │   ├── telegram_bot.py      # Telegram 接入
+    │   ├── finance_utils.py     # 财务工具
+    │   ├── requirements.txt     # Python 依赖
+    │   ├── skills/              # 25 个功能模块 → 55 个 Skill
+    │   └── web_static/          # 14 个 Web 页面
 ├── deploy/                  # Docker + SCF 部署
 ├── tests/                   # 测试
 ├── landing/                 # 官网首页

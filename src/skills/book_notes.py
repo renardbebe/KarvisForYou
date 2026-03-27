@@ -507,11 +507,46 @@ def _parse_json(text):
 
 # Skill 热加载注册表（O-010）
 SKILL_REGISTRY = {
-    "book.create": create,
-    "book.excerpt": excerpt,
-    "book.thought": thought,
-    "book.summary": summary,
-    "book.quotes": quotes,
-    "book.list": list_books,
-    "book.status": update_status,
+    "book.create": {
+        "handler": create,
+        "prompt": '**book.create** `{name, author, category, description, thought?, status?}` — 创建/切换读书笔记（status: want_read=想读 | reading=在读 | finished=读完 | paused=搁置，默认 want_read。根据用户语义判断：「想看/想读/加入书单」→want_read，「开始读/在读」→reading）',
+        "simple": True,
+        "skip_note": True,
+    },
+    "book.excerpt": {
+        "handler": excerpt,
+        "prompt": '**book.excerpt** `{content, book?}` — 添加书摘',
+        "simple": True,
+        "skip_note": True,
+    },
+    "book.thought": {
+        "handler": thought,
+        "prompt": '**book.thought** `{content, book?}` — 添加读书感想',
+        "simple": True,
+        "skip_note": True,
+    },
+    "book.summary": {
+        "handler": summary,
+        "prompt": '**book.summary** `{book?}` — 生成读书总结',
+        "simple": True,
+        "skip_note": True,
+    },
+    "book.quotes": {
+        "handler": quotes,
+        "prompt": '**book.quotes** `{book?}` — 提炼金句',
+        "simple": True,
+        "skip_note": True,
+    },
+    "book.list": {
+        "handler": list_books,
+        "prompt": '**book.list** `{status?}` — 查看书单（status 可选过滤：want_read/reading/finished/paused）',
+        "simple": True,
+        "skip_note": True,
+    },
+    "book.status": {
+        "handler": update_status,
+        "prompt": '**book.status** `{book, status}` — 修改阅读状态（status: want_read=想读 | reading=在读 | finished=读完 | paused=搁置）',
+        "simple": True,
+        "skip_note": True,
+    },
 }

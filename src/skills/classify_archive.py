@@ -200,5 +200,10 @@ def _append_to_dated_file(ctx, file_path, date_str, entry, cat_info):
 
 # Skill 热加载注册表（O-010）
 SKILL_REGISTRY = {
-    "classify.archive": execute,
+    "classify.archive": {
+        "handler": execute,
+        "prompt": '**classify.archive** `{category, title, content, attachment?, merge?}` — 归档（category: work|emotion|fun|misc, title≤10字, merge=true 合并到最近同类）',
+        "simple": True,
+        "skip_note": False,
+    },
 }

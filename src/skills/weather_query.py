@@ -262,5 +262,10 @@ def query(params, state, ctx):
 
 # ============ Skill 热加载注册表 ============
 SKILL_REGISTRY = {
-    "weather.query": query,
+    "weather.query": {
+        "handler": query,
+        "prompt": '**weather.query** `{city?}` — 查询实时天气。city 可选，默认用用户所在城市',
+        "simple": False,
+        "skip_note": True,
+    },
 }

@@ -58,5 +58,10 @@ def generate_web_token(params, state, ctx):
 # ============ Skill 注册 ============
 
 SKILL_REGISTRY = {
-    "web.token": generate_web_token,
+    "web.token": {
+        "handler": generate_web_token,
+        "prompt": '**web.token** `{}` — 生成 Web 查看链接',
+        "simple": True,
+        "skip_note": True,
+    },
 }

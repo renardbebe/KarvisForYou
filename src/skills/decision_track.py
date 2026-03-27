@@ -243,7 +243,22 @@ def get_due_decisions(state):
 
 # ============ Skill 热加载注册表 ============
 SKILL_REGISTRY = {
-    "decision.record": record,
-    "decision.review": review,
-    "decision.list": list_decisions,
+    "decision.record": {
+        "handler": record,
+        "prompt": '**decision.record** `{topic, decision, emotion?, review_days?}` — 记录决策（默认3天后复盘）',
+        "simple": True,
+        "skip_note": True,
+    },
+    "decision.review": {
+        "handler": review,
+        "prompt": '**decision.review** `{decision_id?, result, feeling?}` — 决策复盘',
+        "simple": False,
+        "skip_note": True,
+    },
+    "decision.list": {
+        "handler": list_decisions,
+        "prompt": '**decision.list** `{}` — 查看待复盘决策',
+        "simple": False,
+        "skip_note": True,
+    },
 }

@@ -311,5 +311,10 @@ def _write_mood_diary(ctx, file_path, date_str, mood_content):
 
 # Skill 热加载注册表
 SKILL_REGISTRY = {
-    "mood.generate": execute,
+    "mood.generate": {
+        "handler": execute,
+        "prompt": '**mood.generate** `{date?}` — 生成情绪日记',
+        "simple": True,
+        "skip_note": False,
+    },
 }

@@ -97,5 +97,10 @@ def _format_message(content, attachment):
 
 # Skill 热加载注册表（O-010）
 SKILL_REGISTRY = {
-    "note.save": execute,
+    "note.save": {
+        "handler": execute,
+        "prompt": '**note.save** `{content, attachment?}` — 保存到 Quick-Notes',
+        "simple": True,
+        "skip_note": False,
+    },
 }

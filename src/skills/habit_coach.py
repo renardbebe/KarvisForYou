@@ -328,8 +328,28 @@ def _days_until(date_str):
 
 # ============ Skill 热加载注册表 ============
 SKILL_REGISTRY = {
-    "habit.propose": propose,
-    "habit.nudge": nudge,
-    "habit.status": status,
-    "habit.complete": complete,
+    "habit.propose": {
+        "handler": propose,
+        "prompt": '**habit.propose** `{name, hypothesis, triggers, micro_action, duration_days?, start_date?}` — 提议微习惯实验（start_date=YYYY-MM-DD）',
+        "simple": True,
+        "skip_note": True,
+    },
+    "habit.nudge": {
+        "handler": nudge,
+        "prompt": '**habit.nudge** `{trigger_text?, accepted?}` — 实验触发/用户回复接受拒绝',
+        "simple": True,
+        "skip_note": True,
+    },
+    "habit.status": {
+        "handler": status,
+        "prompt": '**habit.status** `{}` — 查看实验进度',
+        "simple": True,
+        "skip_note": True,
+    },
+    "habit.complete": {
+        "handler": complete,
+        "prompt": '**habit.complete** `{result_summary?, success?}` — 结束实验',
+        "simple": True,
+        "skip_note": True,
+    },
 }

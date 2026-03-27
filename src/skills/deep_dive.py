@@ -295,5 +295,10 @@ tags: [deep-dive]
 
 # ============ Skill 热加载注册表 ============
 SKILL_REGISTRY = {
-    "deep.dive": dive,
+    "deep.dive": {
+        "handler": dive,
+        "prompt": '**deep.dive** `{topic, keywords?, save?}` — 主题深潜：跨时间线深度分析',
+        "simple": False,
+        "skip_note": True,
+    },
 }

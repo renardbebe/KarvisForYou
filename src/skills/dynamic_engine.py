@@ -280,5 +280,10 @@ def execute(params, state, ctx=None):
 
 # ============ Skill 注册表 ============
 SKILL_REGISTRY = {
-    "dynamic": execute,
+    "dynamic": {
+        "handler": execute,
+        "prompt": '**dynamic** `{actions: [{op, path, value?}...]}` — 通用状态操作。op: state.set/state.delete/state.push/file.write/file.append。可操作: active_experiment.*/daily_top3/active_book/active_media/pending_decisions/custom.*。优先用专用skill，dynamic是兜底',
+        "simple": True,
+        "skip_note": False,
+    },
 }

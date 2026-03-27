@@ -653,8 +653,28 @@ def _write_log_entry(entry, ctx):
 
 # Skill 热加载注册表
 SKILL_REGISTRY = {
-    "reflect.push": push,
-    "reflect.answer": answer,
-    "reflect.skip": skip,
-    "reflect.history": history,
+    "reflect.push": {
+        "handler": push,
+        "prompt": '**reflect.push** `{}` — 推送深度自问',
+        "simple": True,
+        "skip_note": False,
+    },
+    "reflect.answer": {
+        "handler": answer,
+        "prompt": '**reflect.answer** `{answer}` — 回答深度自问',
+        "simple": True,
+        "skip_note": False,
+    },
+    "reflect.skip": {
+        "handler": skip,
+        "prompt": '**reflect.skip** `{}` — 跳过深度自问',
+        "simple": True,
+        "skip_note": False,
+    },
+    "reflect.history": {
+        "handler": history,
+        "prompt": '**reflect.history** `{days?}` — 查看自问记录（默认7天）',
+        "simple": True,
+        "skip_note": False,
+    },
 }

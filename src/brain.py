@@ -831,7 +831,7 @@ def _process_inner(payload, send_fn, ctx, t_start, user_id):
 
     _pending_note_filter = False  # 是否需要 Flash 后判
     if payload.get("type") != "system" and primary_skill not in ("reflect.answer", "reflect.skip"):
-        if primary_skill in _SKIP_NOTE_SKILLS:
+        if primary_skill in _get_skip_note_skills():
             _log(f"[Brain][NoteFilter] 规则跳过: skill={primary_skill}")
         elif primary_skill == "note.save":
             # 用户明确要求记录，直接写入
@@ -1121,33 +1121,28 @@ def _run_agent_loop(system_prompt, user_message, first_decision, first_context, 
 
 # ── V4: Flash 回复层 — prompt 从 prompts 模块取 ──
 
-# ── V4: 不需要 Flash 加工的简单 skill ──
-_SIMPLE_SKILLS = frozenset({
-    "note.save", "classify.archive",
-    "todo.add", "todo.done", "todo.edit", "todo.delete", "todo.list", "todo.remind_cancel",
-    "book.create", "book.excerpt", "book.thought", "book.summary", "book.quotes", "book.list", "book.status",
-    "media.create", "media.thought",
-    "mood.generate", "voice.journal",
-    "settings.nickname", "settings.ai_name", "settings.soul", "settings.info",
-    "web.token",
-    "habit.propose", "habit.nudge", "habit.status", "habit.complete",
-    "decision.record", "dynamic",
-    "reflect.push", "reflect.answer", "reflect.skip", "reflect.history",
-    "discuss.start", "discuss.reply", "discuss.conclude", "discuss.cancel",
-})
+# ── V13: simple / skip_note 集合从 SKILL_REGISTRY 元数据自动派生 ──
+# 新增 skill 只需在 SKILL_REGISTRY 中声明 simple=True / skip_note=True，
+# 无需再手动维护这两个 frozenset。
 
-# ── 速记智能过滤：规则预筛跳过集合（V-Web-01）──
-# 这些 skill 的消息已由对应 handler 结构化处理，无需重复写入 Quick-Notes
-_SKIP_NOTE_SKILLS = frozenset({
-    "todo.add", "todo.done", "todo.edit", "todo.delete", "todo.list",
-    "habit.propose", "habit.nudge", "habit.status", "habit.complete",
-    "decision.record", "decision.review", "decision.list",
-    "book.create", "book.excerpt", "book.thought", "book.summary", "book.quotes", "book.list", "book.status",
-    "media.create", "media.thought",
-    "web.token", "weather.query", "web.search",
-    "settings.nickname", "settings.ai_name", "settings.soul", "settings.info", "settings.frequency",
-    "deep.dive",
-})
+_SIMPLE_SKILLS = None   # 延迟加载
+_SKIP_NOTE_SKILLS = None
+
+def _get_simple_skills():
+    """获取不需要 Flash 加工的简单 skill 集合（延迟加载+缓存）。"""
+    global _SIMPLE_SKILLS
+    if _SIMPLE_SKILLS is None:
+        from skill_loader import get_simple_skills
+        _SIMPLE_SKILLS = get_simple_skills()
+    return _SIMPLE_SKILLS
+
+def _get_skip_note_skills():
+    """获取跳过速记写入的 skill 集合（延迟加载+缓存）。"""
+    global _SKIP_NOTE_SKILLS
+    if _SKIP_NOTE_SKILLS is None:
+        from skill_loader import get_skip_note_skills
+        _SKIP_NOTE_SKILLS = get_skip_note_skills()
+    return _SKIP_NOTE_SKILLS
 
 
 def _get_primary_skill(decision):
@@ -1260,7 +1255,7 @@ def _resolve_reply(user_text, decision, steps, step_results):
         return llm_reply
 
     # 快速路径 2：所有 step 都是简单 skill
-    if all(s in _SIMPLE_SKILLS for s in all_skills):
+    if all(s in _get_simple_skills() for s in all_skills):
         # 优先用 skill 返回的 reply，其次用 LLM 预生成的 reply
         for sr in step_results:
             r = sr.get("result", {})
@@ -1269,7 +1264,7 @@ def _resolve_reply(user_text, decision, steps, step_results):
         return llm_reply
 
     # 快速路径 3：单步且有 skill_reply 的简单 skill
-    if len(step_results) == 1 and all_skills[0] in _SIMPLE_SKILLS:
+    if len(step_results) == 1 and all_skills[0] in _get_simple_skills():
         r = step_results[0].get("result", {})
         return r.get("reply") if isinstance(r, dict) else llm_reply
 
