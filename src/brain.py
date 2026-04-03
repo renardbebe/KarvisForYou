@@ -818,7 +818,9 @@ def _process_inner(payload, send_fn, ctx, t_start, user_id):
                           "settings.nickname", "settings.ai_name", "settings.soul",
                           "settings.info", "settings.skills", "web.token",
                           "weather.query", "web.search",
-                          "discuss.start", "discuss.reply", "discuss.conclude", "discuss.cancel")
+                          "discuss.start", "discuss.reply", "discuss.conclude", "discuss.cancel",
+                          # 书单/影视记录 — 用户明确表达要记录，不应被自问拦截
+                          "book.create", "book.update", "book.list", "book.note")
     if (state.get("reflect_pending")
             and payload.get("type") != "system"
             and primary_skill not in _REFLECT_SKILLS
