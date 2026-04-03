@@ -2,6 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# 使用清华镜像源加速 pip 安装
+ENV PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+ENV PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
+
 # 安装依赖
 COPY src/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
